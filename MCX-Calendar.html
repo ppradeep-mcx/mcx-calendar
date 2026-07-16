@@ -496,7 +496,7 @@ function initCalendar() {
 async function loadEvents() {
   try {
     const token = await getToken();
-    let url = `https://graph.microsoft.com/v1.0/sites/${SITE_HOST}:${SITE_PATH}/lists/${LIST_ID}/items?$expand=fields&$top=500`;
+    let url = `https://graph.microsoft.com/v1.0/sites/${SITE_HOST}:${SITE_PATH}:/lists/${LIST_ID}/items?$expand=fields&$top=500`;
     let events = [];
 
     while (url) {
