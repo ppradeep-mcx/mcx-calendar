@@ -127,6 +127,9 @@
 
     .modal-body { padding: 20px 24px; }
     .modal-footer { padding: 16px 24px; border-top: 1px solid #e5e7eb; display: flex; gap: 10px; justify-content: flex-end; }
+    .btn-danger { background: #dc2626; color: #fff; border: none; border-radius: 6px; padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background 0.15s; margin-right: auto; }
+    .btn-danger:hover { background: #b91c1c; }
+    .btn-danger:disabled { background: #fca5a5; cursor: not-allowed; }
 
     /* Detail modal rows */
     .detail-row { display: flex; gap: 12px; margin-bottom: 14px; font-size: 14px; }
@@ -290,6 +293,10 @@
       <div class="detail-row"><div class="label">Case File ID</div><div class="val" id="det-fileid"></div></div>
       <div class="detail-row"><div class="label">Assignees</div><div class="val" id="det-assignees"></div></div>
       <div class="detail-row"><div class="label">Notes</div><div class="val" id="det-notes"></div></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-danger" id="det-delete-btn" onclick="deleteEvent()">Delete Event</button>
+      <button class="btn-secondary" onclick="closeDetail()">Close</button>
     </div>
   </div>
 </div>
@@ -536,7 +543,10 @@ async function loadEvents() {
 }
 
 // ─── DETAIL MODAL ─────────────────────────────────────────────────────────
+let _currentDetailEvent = null;
+
 function showDetail(event) {
+  _currentDetailEvent = event;
   const p = event.extendedProps;
   document.getElementById("det-title").textContent = event.title;
 
@@ -570,6 +580,32 @@ function showDetail(event) {
 function closeDetail(e) {
   if (e && e.target !== document.getElementById("overlay-detail")) return;
   document.getElementById("overlay-detail").classList.remove("active");
+  _currentDetailEvent = null;
+}
+
+async function deleteEvent() {
+  if (!_currentDetailEvent) return;
+  const itemId = _currentDetailEvent.id;
+  if (!itemId) { alert("Cannot delete: no SharePoint item ID found."); return; }
+  if (!confirm(`Delete "${_currentDetailEvent.title}"? This cannot be undone.`)) return;
+
+  const btn = document.getElementById("det-delete-btn");
+  btn.disabled = true;
+  btn.textContent = "Deleting…";
+
+  try {
+    const token = await getToken();
+    const url = `https://graph.microsoft.com/v1.0/sites/${SITE_HOST}:${SITE_PATH}:/lists/${LIST_ID}/items/${itemId}`;
+    const res = await fetch(url, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok && res.status !== 204) throw new Error(`HTTP ${res.status}`);
+    _currentDetailEvent.remove(); // remove from calendar
+    document.getElementById("overlay-detail").classList.remove("active");
+    _currentDetailEvent = null;
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = "Delete Event";
+    alert("Delete failed: " + err.message);
+  }
 }
 
 // ─── ADD EVENT MODAL ──────────────────────────────────────────────────────
@@ -615,7 +651,7 @@ async function submitEvent(e) {
     // Remove undefined
     Object.keys(fields).forEach(k => fields[k] === undefined && delete fields[k]);
 
-    const url = `https://graph.microsoft.com/v1.0/sites/${SITE_HOST}:${SITE_PATH}/lists/${LIST_ID}/items`;
+    const url = `https://graph.microsoft.com/v1.0/sites/${SITE_HOST}:${SITE_PATH}:/lists/${LIST_ID}/items`;
     const res = await fetch(url, {
       method: "POST",
       headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
