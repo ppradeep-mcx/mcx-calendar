@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Firm Calendar — Mishra X LLP</title>
+
+  <!-- FullCalendar v6 (includes all views + interaction) -->
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
+  <!-- MSAL v2 -->
+  <script src="https://unpkg.com/@azure/msal-browser@2.38.3/lib/msal-browser.min.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f0f2f5;
+      color: #1a1a2e;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── TOP BAR ── */
+    .topbar {
+      background: #002060;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      padding: 0 24px;
+      height: 56px;
+      flex-shrink: 0;
+      gap: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    .topbar .brand { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; opacity: 0.6; }
+    .topbar .title { font-size: 17px; font-weight: 600; flex: 1; }
+    .topbar .user-badge {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 13px; opacity: 0.85;
+    }
+    .topbar .user-badge .dot { width: 7px; height: 7px; background: #22c55e; border-radius: 50%; }
+    .btn-add {
+      background: #c45911; color: #fff; border: none; border-radius: 6px;
+      padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-add:hover { background: #a34010; }
+    .btn-signout {
+      background: transparent; color: rgba(255,255,255,0.7); border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 5px; padding: 5px 10px; font-size: 12px; cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-signout:hover { background: rgba(255,255,255,0.1); color: #fff; }
+
+    /* ── LEGEND ── */
+    .legend {
+      background: #fff;
+      border-bottom: 1px solid #e5e7eb;
+      padding: 6px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      flex-shrink: 0;
+    }
+    .legend-item { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #555; }
+    .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+    /* ── CALENDAR WRAPPER ── */
+    #calendar-wrap {
+      flex: 1;
+      padding: 16px 24px 16px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    #calendar { flex: 1; min-height: 0; }
+
+    /* FullCalendar overrides */
+    .fc { height: 100% !important; font-family: inherit; }
+    .fc .fc-toolbar-title { font-size: 16px; font-weight: 600; }
+    .fc .fc-button-primary { background: #002060; border-color: #002060; font-size: 13px; }
+    .fc .fc-button-primary:hover { background: #003080; border-color: #003080; }
+    .fc .fc-button-primary:not(:disabled).fc-button-active { background: #c45911; border-color: #c45911; }
+    .fc .fc-button-primary:focus { box-shadow: 0 0 0 3px rgba(0,32,96,0.25); }
+    .fc .fc-event { cursor: pointer; border: none !important; border-radius: 3px; font-size: 11px; }
+    .fc .fc-event-title { font-weight: 500; }
+    .fc-daygrid-event-dot { border-color: inherit !important; }
+    .fc .fc-day-today { background: rgba(196,89,17,0.06) !important; }
+    .fc .fc-col-header-cell { background: #f8fafc; }
+
+    /* ── MODALS ── */
+    .overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.45); z-index: 1000;
+      align-items: center; justify-content: center;
+    }
+    .overlay.active { display: flex; }
+
+    .modal {
+      background: #fff; border-radius: 10px;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.2);
+      width: 100%; max-height: 90vh; overflow-y: auto;
+    }
+    .modal-sm { max-width: 420px; }
+    .modal-md { max-width: 560px; }
+
+    .modal-header {
+      padding: 20px 24px 16px;
+      border-bottom: 1px solid #e5e7eb;
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+    }
+    .modal-header h2 { font-size: 17px; font-weight: 600; }
+    .modal-header .event-type-chip {
+      font-size: 11px; font-weight: 600; padding: 3px 8px;
+      border-radius: 12px; color: #fff; flex-shrink: 0; margin-top: 2px;
+    }
+    .btn-close {
+      background: none; border: none; cursor: pointer; color: #9ca3af;
+      font-size: 20px; line-height: 1; padding: 0; flex-shrink: 0;
+      transition: color 0.15s;
+    }
+    .btn-close:hover { color: #374151; }
+
+    .modal-body { padding: 20px 24px; }
+    .modal-footer { padding: 16px 24px; border-top: 1px solid #e5e7eb; display: flex; gap: 10px; justify-content: flex-end; }
+
+    /* Detail modal rows */
+    .detail-row { display: flex; gap: 12px; margin-bottom: 14px; font-size: 14px; }
+    .detail-row .label { font-weight: 600; color: #374151; min-width: 110px; flex-shrink: 0; }
+    .detail-row .val { color: #111; }
+    .detail-row .val.muted { color: #9ca3af; font-style: italic; }
+
+    /* Add form */
+    .form-row { margin-bottom: 16px; }
+    .form-row label { display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 5px; }
+    .form-row label .req { color: #dc2626; margin-left: 2px; }
+    .form-row input, .form-row select, .form-row textarea {
+      width: 100%; border: 1px solid #d1d5db; border-radius: 6px;
+      padding: 8px 11px; font-size: 14px; color: #111; background: #fff;
+      font-family: inherit; transition: border 0.15s, box-shadow 0.15s;
+    }
+    .form-row input:focus, .form-row select:focus, .form-row textarea:focus {
+      outline: none; border-color: #002060; box-shadow: 0 0 0 3px rgba(0,32,96,0.1);
+    }
+    .form-row textarea { resize: vertical; min-height: 72px; }
+    .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    .btn-primary {
+      background: #002060; color: #fff; border: none; border-radius: 6px;
+      padding: 10px 20px; font-size: 14px; font-weight: 600; cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-primary:hover:not(:disabled) { background: #003080; }
+    .btn-primary:disabled { opacity: 0.55; cursor: not-allowed; }
+    .btn-secondary {
+      background: #fff; color: #374151; border: 1px solid #d1d5db; border-radius: 6px;
+      padding: 10px 20px; font-size: 14px; cursor: pointer; transition: background 0.15s;
+    }
+    .btn-secondary:hover { background: #f9fafb; }
+
+    .status-msg {
+      border-radius: 6px; padding: 10px 14px; font-size: 13px;
+      margin-top: 14px; display: none; line-height: 1.5;
+    }
+    .status-msg.loading { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; display: block; }
+    .status-msg.success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; display: block; }
+    .status-msg.error   { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; display: block; }
+
+    /* ── AUTH / DENIED SCREENS ── */
+    #screen-auth, #screen-denied {
+      position: fixed; inset: 0; background: #f0f2f5;
+      display: flex; align-items: center; justify-content: center; z-index: 2000;
+    }
+    #screen-denied { display: none; }
+    .auth-card {
+      background: #fff; border-radius: 10px; box-shadow: 0 4px 24px rgba(0,0,0,0.1);
+      width: 360px; overflow: hidden; text-align: center;
+    }
+    .auth-card .auth-header { background: #002060; color: #fff; padding: 28px 24px; }
+    .auth-card .auth-header .firm { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; opacity: 0.6; }
+    .auth-card .auth-header h1 { font-size: 20px; font-weight: 600; margin-top: 4px; }
+    .auth-card .auth-body { padding: 28px 24px; }
+    .auth-card .auth-body p { color: #555; font-size: 14px; margin-bottom: 20px; line-height: 1.5; }
+    .btn-ms {
+      background: #0078d4; color: #fff; border: none; border-radius: 6px;
+      padding: 11px 24px; font-size: 14px; cursor: pointer; width: 100%;
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      transition: background 0.15s;
+    }
+    .btn-ms:hover { background: #005a9e; }
+    .btn-ms svg { width: 18px; height: 18px; }
+    .denied-icon { font-size: 36px; margin-bottom: 10px; }
+    .denied-acct { font-weight: 600; color: #dc2626; word-break: break-all; }
+    .link-sm { color: #0078d4; font-size: 12px; cursor: pointer; }
+    .link-sm:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+<!-- ── AUTH SCREEN ── -->
+<div id="screen-auth">
+  <div class="auth-card">
+    <div class="auth-header">
+      <div class="firm">Mishra X LLP</div>
+      <h1>Firm Calendar</h1>
+    </div>
+    <div class="auth-body">
+      <p>Sign in with your <strong>@mishrax.com</strong> Microsoft account to access the firm calendar.</p>
+      <button class="btn-ms" onclick="signIn()">
+        <svg viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg">
+          <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
+          <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
+          <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
+          <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+        </svg>
+        Sign in with Microsoft
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── ACCESS DENIED SCREEN ── -->
+<div id="screen-denied">
+  <div class="auth-card">
+    <div class="auth-header" style="background:#7f1d1d;">
+      <div class="firm">Mishra X LLP</div>
+      <h1>Access Restricted</h1>
+    </div>
+    <div class="auth-body">
+      <div class="denied-icon">🔒</div>
+      <p>This page is restricted.<br>You signed in as:<br>
+        <span class="denied-acct" id="denied-acct"></span><br><br>
+        Only <strong>ppradeep@mishrax.com</strong> can access this page.
+      </p>
+      <a class="link-sm" onclick="signOut()">Sign in with a different account →</a>
+    </div>
+  </div>
+</div>
+
+<!-- ── MAIN APP ── -->
+<div class="topbar" id="topbar" style="display:none;">
+  <div>
+    <div class="brand">Mishra X LLP</div>
+    <div class="title">Firm Calendar</div>
+  </div>
+  <div class="user-badge">
+    <div class="dot"></div>
+    <span id="topbar-user"></span>
+  </div>
+  <button class="btn-add" onclick="openAddModal()">+ Add Event</button>
+  <button class="btn-signout" onclick="signOut()">Sign out</button>
+</div>
+
+<div class="legend" id="legend" style="display:none;">
+  <span style="font-size:12px; color:#888; font-weight:600; margin-right:4px;">EVENT TYPE:</span>
+  <div class="legend-item"><div class="legend-dot" style="background:#dc2626"></div>Deposition</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#2563eb"></div>MSC</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#7c3aed"></div>Trial</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#059669"></div>QME Appointment</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#0d9488"></div>IME Appointment</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#d97706"></div>Hearing</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#9333ea"></div>Arbitration</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#0891b2"></div>Mediation</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#6b7280"></div>Other</div>
+</div>
+
+<div id="calendar-wrap" style="display:none;">
+  <div id="calendar"></div>
+</div>
+
+<!-- ── EVENT DETAIL MODAL ── -->
+<div class="overlay" id="overlay-detail" onclick="closeDetail(event)">
+  <div class="modal modal-md" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <div>
+        <h2 id="det-title"></h2>
+        <div style="margin-top:6px; display:flex; gap:8px; align-items:center;">
+          <span class="event-type-chip" id="det-type-chip"></span>
+          <span style="font-size:13px; color:#888;" id="det-datetime"></span>
+        </div>
+      </div>
+      <button class="btn-close" onclick="closeDetail()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="detail-row"><div class="label">Case</div><div class="val" id="det-case"></div></div>
+      <div class="detail-row"><div class="label">Case File ID</div><div class="val" id="det-fileid"></div></div>
+      <div class="detail-row"><div class="label">Assignees</div><div class="val" id="det-assignees"></div></div>
+      <div class="detail-row"><div class="label">Notes</div><div class="val" id="det-notes"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── ADD EVENT MODAL ── -->
+<div class="overlay" id="overlay-add" onclick="closeAddModal(event)">
+  <div class="modal modal-md" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h2>Add Event</h2>
+      <button class="btn-close" onclick="closeAddModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <form id="add-form" onsubmit="submitEvent(event)">
+
+        <div class="form-row">
+          <label>Title <span class="req">*</span></label>
+          <input type="text" id="f-title" placeholder="e.g. Deposition — Smith v. Acme Corp" required>
+        </div>
+
+        <div class="form-grid-2">
+          <div class="form-row">
+            <label>Event Type <span class="req">*</span></label>
+            <select id="f-type" required>
+              <option value="">— Select —</option>
+              <option>Deposition</option>
+              <option>MSC</option>
+              <option>Trial</option>
+              <option>QME Appointment</option>
+              <option>IME Appointment</option>
+              <option>Hearing</option>
+              <option>Arbitration</option>
+              <option>Conference Call</option>
+              <option>Mediation</option>
+              <option>Other</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label>Assignees</label>
+            <input type="text" id="f-assignees" placeholder="e.g. Aneeta Mishra, Roopali">
+          </div>
+        </div>
+
+        <div class="form-grid-2">
+          <div class="form-row">
+            <label>Case Name</label>
+            <input type="text" id="f-casename" placeholder="Smith, John v. Acme Corp">
+          </div>
+          <div class="form-row">
+            <label>Case File ID</label>
+            <input type="text" id="f-casefileid" placeholder="MerusCase File ID">
+          </div>
+        </div>
+
+        <div class="form-grid-2">
+          <div class="form-row">
+            <label>Start <span class="req">*</span></label>
+            <input type="datetime-local" id="f-start" required>
+          </div>
+          <div class="form-row">
+            <label>End</label>
+            <input type="datetime-local" id="f-end">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label>Notes</label>
+          <textarea id="f-notes" placeholder="Attorney handling, phone, location, any additional details…"></textarea>
+        </div>
+
+        <div class="status-msg" id="add-status"></div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeAddModal()">Cancel</button>
+      <button class="btn-primary" id="submit-btn" onclick="submitEvent(event)">Add to Calendar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── CONFIG ─────────────────────────────────────────────────────────────────
+const CLIENT_ID   = "28eec654-6fc8-457b-86c7-e164cafe4aa1";
+const TENANT_ID   = "5dd8c0ee-d37a-47a1-bb5e-8521f1be863a";
+const ALLOWED_UPN = "ppradeep@mishrax.com";
+const SITE_HOST   = "mishrax.sharepoint.com";
+const SITE_PATH   = "/sites/cms";
+const LIST_ID     = "196ef90f-a328-4ba2-9307-cfe9c7b203fe"; // Firm Events
+const SCOPES      = ["https://graph.microsoft.com/Sites.ReadWrite.All"];
+// ────────────────────────────────────────────────────────────────────────────
+
+const EVENT_COLORS = {
+  "Deposition":       "#dc2626",
+  "MSC":              "#2563eb",
+  "Trial":            "#7c3aed",
+  "QME Appointment":  "#059669",
+  "IME Appointment":  "#0d9488",
+  "Hearing":          "#d97706",
+  "Arbitration":      "#9333ea",
+  "Conference Call":  "#6b7280",
+  "Mediation":        "#0891b2",
+};
+const defaultColor = "#374151";
+
+const msalConfig = {
+  auth: {
+    clientId: CLIENT_ID,
+    authority: `https://login.microsoftonline.com/${TENANT_ID}`,
+    redirectUri: window.location.href.split('?')[0].split('#')[0]
+  },
+  cache: { cacheLocation: "sessionStorage", storeAuthStateInCookie: false }
+};
+
+const msalInstance = new msal.PublicClientApplication(msalConfig);
+let currentAccount = null;
+let calendar = null;
+
+// ─── INIT ─────────────────────────────────────────────────────────────────
+window.addEventListener("load", async () => {
+  await msalInstance.initialize();
+  const accounts = msalInstance.getAllAccounts();
+  if (accounts.length > 0) {
+    await handleAccount(accounts[0]);
+  }
+});
+
+async function signIn() {
+  try {
+    const result = await msalInstance.loginPopup({ scopes: SCOPES });
+    await handleAccount(result.account);
+  } catch (e) {
+    if (e.errorCode !== "user_cancelled") alert("Sign-in failed: " + e.message);
+  }
+}
+
+async function handleAccount(account) {
+  currentAccount = account;
+  const upn = (account.username || "").toLowerCase();
+
+  if (upn !== ALLOWED_UPN.toLowerCase()) {
+    document.getElementById("screen-auth").style.display = "none";
+    document.getElementById("denied-acct").textContent = account.username;
+    document.getElementById("screen-denied").style.display = "flex";
+    return;
+  }
+
+  // Authorised — show app
+  document.getElementById("screen-auth").style.display = "none";
+  document.getElementById("screen-denied").style.display = "none";
+  document.getElementById("topbar-user").textContent = account.name || account.username;
+  document.getElementById("topbar").style.display = "flex";
+  document.getElementById("legend").style.display = "flex";
+  document.getElementById("calendar-wrap").style.display = "flex";
+
+  initCalendar();
+  await loadEvents();
+}
+
+function signOut() {
+  msalInstance.logoutPopup({ account: currentAccount }).then(() => {
+    currentAccount = null;
+    if (calendar) { calendar.destroy(); calendar = null; }
+    document.getElementById("topbar").style.display = "none";
+    document.getElementById("legend").style.display = "none";
+    document.getElementById("calendar-wrap").style.display = "none";
+    document.getElementById("screen-denied").style.display = "none";
+    document.getElementById("screen-auth").style.display = "flex";
+  });
+}
+
+async function getToken() {
+  try {
+    const r = await msalInstance.acquireTokenSilent({ scopes: SCOPES, account: currentAccount });
+    return r.accessToken;
+  } catch {
+    const r = await msalInstance.acquireTokenPopup({ scopes: SCOPES, account: currentAccount });
+    return r.accessToken;
+  }
+}
+
+// ─── CALENDAR ─────────────────────────────────────────────────────────────
+function initCalendar() {
+  const el = document.getElementById("calendar");
+  calendar = new FullCalendar.Calendar(el, {
+    initialView: "dayGridMonth",
+    headerToolbar: {
+      left: "prev,next today",
+      center: "title",
+      right: "dayGridMonth,timeGridWeek,timeGridDay,listMonth"
+    },
+    buttonText: { today: "Today", month: "Month", week: "Week", day: "Day", list: "Agenda" },
+    height: "100%",
+    eventClick: function(info) { showDetail(info.event); },
+    eventDidMount: function(info) {
+      // Tooltip on hover
+      info.el.title = [
+        info.event.extendedProps.caseName,
+        info.event.extendedProps.assignees
+      ].filter(Boolean).join(" · ");
+    }
+  });
+  calendar.render();
+}
+
+async function loadEvents() {
+  try {
+    const token = await getToken();
+    let url = `https://graph.microsoft.com/v1.0/sites/${SITE_HOST}:${SITE_PATH}/lists/${LIST_ID}/items?$expand=fields&$top=500`;
+    let events = [];
+
+    while (url) {
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      events = events.concat(data.value || []);
+      url = data["@odata.nextLink"] || null;
+    }
+
+    const fcEvents = events
+      .filter(item => item.fields.StartDate)
+      .map(item => {
+        const f = item.fields;
+        return {
+          id: item.id,
+          title: f.Title || "(No title)",
+          start: f.StartDate,
+          end: f.EndDate || null,
+          backgroundColor: EVENT_COLORS[f.EventType] || defaultColor,
+          borderColor: "transparent",
+          extendedProps: {
+            eventType:  f.EventType  || "",
+            caseName:   f.CaseName   || "",
+            caseFileId: f.CaseFileID || "",
+            assignees:  f.Assignees  || "",
+            notes:      f.Notes      || ""
+          }
+        };
+      });
+
+    calendar.removeAllEvents();
+    calendar.addEventSource(fcEvents);
+  } catch (err) {
+    console.error("Load events error:", err);
+  }
+}
+
+// ─── DETAIL MODAL ─────────────────────────────────────────────────────────
+function showDetail(event) {
+  const p = event.extendedProps;
+  document.getElementById("det-title").textContent = event.title;
+
+  const chip = document.getElementById("det-type-chip");
+  chip.textContent = p.eventType || "Event";
+  chip.style.background = event.backgroundColor || defaultColor;
+
+  // Format date/time
+  const fmt = (d) => d ? new Date(d).toLocaleString("en-US", {
+    weekday: "short", month: "short", day: "numeric",
+    year: "numeric", hour: "numeric", minute: "2-digit"
+  }) : null;
+  const startStr = fmt(event.startStr);
+  const endStr   = event.end ? fmt(event.endStr) : null;
+  document.getElementById("det-datetime").textContent = endStr ? `${startStr} → ${endStr}` : startStr;
+
+  const val = (id, text) => {
+    const el = document.getElementById(id);
+    el.textContent = text || "";
+    el.className = text ? "val" : "val muted";
+    if (!text) el.textContent = "—";
+  };
+  val("det-case",      p.caseName);
+  val("det-fileid",    p.caseFileId);
+  val("det-assignees", p.assignees);
+  val("det-notes",     p.notes);
+
+  document.getElementById("overlay-detail").classList.add("active");
+}
+
+function closeDetail(e) {
+  if (e && e.target !== document.getElementById("overlay-detail")) return;
+  document.getElementById("overlay-detail").classList.remove("active");
+}
+
+// ─── ADD EVENT MODAL ──────────────────────────────────────────────────────
+function openAddModal() {
+  document.getElementById("add-form").reset();
+  clearAddStatus();
+  document.getElementById("submit-btn").disabled = false;
+  document.getElementById("overlay-add").classList.add("active");
+}
+
+function closeAddModal(e) {
+  if (e && e.target !== document.getElementById("overlay-add")) return;
+  document.getElementById("overlay-add").classList.remove("active");
+}
+
+async function submitEvent(e) {
+  e.preventDefault();
+  const title = document.getElementById("f-title").value.trim();
+  const type  = document.getElementById("f-type").value;
+  const start = document.getElementById("f-start").value;
+  if (!title || !type || !start) return;
+
+  const btn = document.getElementById("submit-btn");
+  btn.disabled = true;
+  showAddStatus("loading", "Adding event to calendar…");
+
+  try {
+    const token = await getToken();
+    const toISO = v => v ? new Date(v).toISOString() : null;
+
+    const fields = {
+      Title:     title,
+      EventType: type,
+      StartDate: toISO(start),
+      CaseName:   document.getElementById("f-casename").value.trim()   || undefined,
+      CaseFileID: document.getElementById("f-casefileid").value.trim() || undefined,
+      Assignees:  document.getElementById("f-assignees").value.trim()  || undefined,
+      Notes:      document.getElementById("f-notes").value.trim()      || undefined,
+    };
+    const endISO = toISO(document.getElementById("f-end").value);
+    if (endISO) fields.EndDate = endISO;
+
+    // Remove undefined
+    Object.keys(fields).forEach(k => fields[k] === undefined && delete fields[k]);
+
+    const url = `https://graph.microsoft.com/v1.0/sites/${SITE_HOST}:${SITE_PATH}/lists/${LIST_ID}/items`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ fields })
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.error?.message || `HTTP ${res.status}`);
+    }
+
+    const created = await res.json();
+    showAddStatus("success", `✓ Event added (ID: ${created.id}). Calendar refreshing…`);
+
+    // Add to calendar immediately without a full reload
+    calendar.addEvent({
+      id: created.id,
+      title: fields.Title,
+      start: fields.StartDate,
+      end:   fields.EndDate || null,
+      backgroundColor: EVENT_COLORS[fields.EventType] || defaultColor,
+      borderColor: "transparent",
+      extendedProps: {
+        eventType:  fields.EventType  || "",
+        caseName:   fields.CaseName   || "",
+        caseFileId: fields.CaseFileID || "",
+        assignees:  fields.Assignees  || "",
+        notes:      fields.Notes      || ""
+      }
+    });
+
+    setTimeout(() => closeAddModal(), 1800);
+
+  } catch (err) {
+    showAddStatus("error", "Failed: " + err.message);
+    btn.disabled = false;
+  }
+}
+
+function showAddStatus(type, msg) {
+  const el = document.getElementById("add-status");
+  el.className = "status-msg " + type;
+  el.textContent = msg;
+}
+function clearAddStatus() {
+  const el = document.getElementById("add-status");
+  el.className = "status-msg";
+  el.textContent = "";
+}
+</script>
+</body>
+</html>
