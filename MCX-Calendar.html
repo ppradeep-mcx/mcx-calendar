@@ -352,12 +352,23 @@
 
         <div class="form-grid-2">
           <div class="form-row">
-            <label>Start <span class="req">*</span></label>
-            <input type="datetime-local" id="f-start" required>
+            <label>Start Date <span class="req">*</span></label>
+            <input type="date" id="f-start-date" required>
           </div>
           <div class="form-row">
-            <label>End</label>
-            <input type="datetime-local" id="f-end">
+            <label>Start Time</label>
+            <select id="f-start-time"></select>
+          </div>
+        </div>
+
+        <div class="form-grid-2">
+          <div class="form-row">
+            <label>End Date</label>
+            <input type="date" id="f-end-date">
+          </div>
+          <div class="form-row">
+            <label>End Time</label>
+            <select id="f-end-time"></select>
           </div>
         </div>
 
@@ -415,6 +426,8 @@ let calendar = null;
 
 // ─── INIT ─────────────────────────────────────────────────────────────────
 window.addEventListener("load", async () => {
+  buildTimeOptions("f-start-time", true, "All Day");
+  buildTimeOptions("f-end-time",   true, "— None —");
   await msalInstance.initialize();
   const accounts = msalInstance.getAllAccounts();
   if (accounts.length > 0) {
@@ -609,8 +622,37 @@ async function deleteEvent() {
 }
 
 // ─── ADD EVENT MODAL ──────────────────────────────────────────────────────
+
+// Populate time dropdowns with 30-min slots 6 AM – 9 PM
+function buildTimeOptions(selectId, includeBlank, blankLabel) {
+  const sel = document.getElementById(selectId);
+  sel.innerHTML = "";
+  const blank = document.createElement("option");
+  blank.value = "";
+  blank.textContent = blankLabel || "All Day";
+  sel.appendChild(blank);
+  for (let h = 6; h <= 21; h++) {
+    for (let m = 0; m < 60; m += 30) {
+      if (h === 21 && m > 0) break;
+      const hh = h % 12 === 0 ? 12 : h % 12;
+      const mm = m === 0 ? "00" : "30";
+      const ampm = h < 12 ? "AM" : "PM";
+      const val = `${String(h).padStart(2,"0")}:${mm}`;
+      const opt = document.createElement("option");
+      opt.value = val;
+      opt.textContent = `${hh}:${mm} ${ampm}`;
+      sel.appendChild(opt);
+    }
+  }
+}
+
 function openAddModal() {
   document.getElementById("add-form").reset();
+  buildTimeOptions("f-start-time", true, "All Day");
+  buildTimeOptions("f-end-time",   true, "— None —");
+  // Default start date to today
+  const today = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD
+  document.getElementById("f-start-date").value = today;
   clearAddStatus();
   document.getElementById("submit-btn").disabled = false;
   document.getElementById("overlay-add").classList.add("active");
@@ -623,10 +665,20 @@ function closeAddModal(e) {
 
 async function submitEvent(e) {
   e.preventDefault();
-  const title = document.getElementById("f-title").value.trim();
-  const type  = document.getElementById("f-type").value;
-  const start = document.getElementById("f-start").value;
-  if (!title || !type || !start) return;
+  const title     = document.getElementById("f-title").value.trim();
+  const type      = document.getElementById("f-type").value;
+  const startDate = document.getElementById("f-start-date").value;
+  const startTime = document.getElementById("f-start-time").value;
+  const endDate   = document.getElementById("f-end-date").value;
+  const endTime   = document.getElementById("f-end-time").value;
+  if (!title || !type || !startDate) return;
+
+  // Combine date + time into ISO string; if no time selected treat as all-day (noon UTC)
+  const toISO = (date, time) => {
+    if (!date) return null;
+    const combined = time ? `${date}T${time}:00` : `${date}T00:00:00`;
+    return new Date(combined).toISOString();
+  };
 
   const btn = document.getElementById("submit-btn");
   btn.disabled = true;
@@ -634,18 +686,17 @@ async function submitEvent(e) {
 
   try {
     const token = await getToken();
-    const toISO = v => v ? new Date(v).toISOString() : null;
 
     const fields = {
       Title:     title,
       EventType: type,
-      StartDate: toISO(start),
+      StartDate: toISO(startDate, startTime),
       CaseName:   document.getElementById("f-casename").value.trim()   || undefined,
       CaseFileID: document.getElementById("f-casefileid").value.trim() || undefined,
       Assignees:  document.getElementById("f-assignees").value.trim()  || undefined,
       Notes:      document.getElementById("f-notes").value.trim()      || undefined,
     };
-    const endISO = toISO(document.getElementById("f-end").value);
+    const endISO = toISO(endDate, endTime);
     if (endISO) fields.EndDate = endISO;
 
     // Remove undefined
