@@ -131,6 +131,10 @@ tr:hover td{background:#f8fafc}
 .task-action-btn{background:none;border:1px solid #d1d5db;border-radius:5px;padding:3px 9px;font-size:12px;cursor:pointer;transition:all .15s;color:#374151}
 .task-action-btn:hover{background:#f3f4f6;border-color:#9ca3af}
 .task-action-btn.danger:hover{background:#fee2e2;border-color:#fca5a5;color:#dc2626}
+.task-source-badge{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.3px;padding:1px 6px;border-radius:10px;vertical-align:middle;margin-right:5px;text-transform:uppercase}
+.src-mc{background:#dbeafe;color:#1e40af}
+.src-email{background:#ffedd5;color:#c2410c}
+.etf-readonly{padding:5px 0;font-size:13px;color:#374151;min-height:28px}
 
 /* ── CALENDAR TAB ── */
 #tab-calendar{flex:1;overflow:hidden;display:none;flex-direction:column}
@@ -278,6 +282,11 @@ tr:hover td{background:#f8fafc}
       <div class="tasks-toolbar">
         <h2>Tasks</h2>
         <span class="tasks-count" id="tasks-count"></span>
+        <select class="filter-select" style="width:120px" id="source-filter" onchange="renderTasksTable()">
+          <option value="">All Sources</option>
+          <option value="mc">MC Tasks</option>
+          <option value="email">Email Tasks</option>
+        </select>
         <select class="filter-select" style="width:140px" id="status-filter" onchange="renderTasksTable()">
           <option value="incomplete">Incomplete</option>
           <option value="done">Done</option>
@@ -294,10 +303,11 @@ tr:hover td{background:#f8fafc}
           <thead>
             <tr>
               <th style="width:36px"></th>
-              <th>Description</th>
+              <th>Title</th>
+              <th style="width:120px">Author</th>
               <th style="width:110px">Due Date</th>
-              <th style="width:200px">Case</th>
-              <th style="width:140px">Assignee</th>
+              <th style="width:180px">Case</th>
+              <th style="width:120px">Assignee</th>
               <th style="width:100px">Actions</th>
             </tr>
           </thead>
@@ -483,6 +493,75 @@ tr:hover td{background:#f8fafc}
   </div>
 </div>
 
+<!-- Edit Email Task -->
+<div class="overlay" id="overlay-email-task-form" onclick="closeEmailTaskModal(event)">
+  <div class="modal modal-md" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h2>Edit Email Task</h2>
+      <button class="btn-close" onclick="closeEmailTaskModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <form id="email-task-form" onsubmit="submitEmailTask(event)">
+        <div class="form-grid-2">
+          <div class="form-row">
+            <label>From</label>
+            <div id="etf-from" class="etf-readonly"></div>
+          </div>
+          <div class="form-row">
+            <label>Received</label>
+            <div id="etf-received" class="etf-readonly"></div>
+          </div>
+        </div>
+        <hr style="border:none;border-top:1px solid #e5e7eb;margin:4px 0 10px">
+        <div class="form-row">
+          <label>Task Title <span class="req">*</span></label>
+          <input type="text" id="etf-title" placeholder="Task description">
+        </div>
+        <div class="form-grid-2">
+          <div class="form-row">
+            <label>Due Date</label>
+            <input type="date" id="etf-due">
+          </div>
+          <div class="form-row">
+            <label>Assignee</label>
+            <input type="text" id="etf-assignee" placeholder="e.g. Aneeta Mishra">
+          </div>
+        </div>
+        <div class="form-grid-2">
+          <div class="form-row">
+            <label>Case File ID</label>
+            <input type="number" id="etf-caseid" placeholder="MerusCase File ID">
+          </div>
+          <div class="form-row">
+            <label>Priority</label>
+            <select id="etf-priority">
+              <option value="High">High</option>
+              <option value="Medium" selected>Medium</option>
+              <option value="Low">Low</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <label>Notes</label>
+          <textarea id="etf-notes" rows="3" placeholder="Additional notes…"></textarea>
+        </div>
+        <div class="form-row">
+          <label>Status</label>
+          <select id="etf-status">
+            <option value="Open">Open</option>
+            <option value="Resolved">Resolved</option>
+          </select>
+        </div>
+        <div class="status-msg" id="email-task-form-status"></div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeEmailTaskModal()">Cancel</button>
+      <button class="btn-primary" id="email-task-submit-btn" onclick="submitEmailTask(event)">Save</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ═══════════════════════════════════════════════
 //  CONFIG
@@ -540,6 +619,10 @@ let contactMap = {};
 let tasksMap   = {};   // caseFileID → [task, …]
 let TASKS_ARR  = [];
 let TASKS_LIST_ID = null;  // discovered at runtime
+let EMAIL_TASKS_ARR = [];
+let EMAIL_TASKS_LIST_ID = null;  // discovered at runtime
+let _emailTaskPollTimer  = null;
+let _emailTaskFormSpId   = null;
 
 let fcCalendar = null;
 let _calDetailEvent = null;  // FullCalendar event object currently shown in detail modal
@@ -718,6 +801,30 @@ async function loadAllData() {
     TASKS_ARR = taskItems.map(i => ({ _spId: i.id, ...i.fields }));
   } else {
     TASKS_ARR = [];
+  }
+
+  showLoading("Loading email tasks…");
+  EMAIL_TASKS_LIST_ID = listIndex["Email Tasks"] || null;
+  if (EMAIL_TASKS_LIST_ID) {
+    const etItems = await loadList(EMAIL_TASKS_LIST_ID, null, token);
+    EMAIL_TASKS_ARR = etItems.map(i => ({ _spId: i.id, _source: "email", ...i.fields }));
+  } else {
+    EMAIL_TASKS_ARR = [];
+  }
+  // Start 15-min background poll for Email Tasks
+  if (!_emailTaskPollTimer) {
+    _emailTaskPollTimer = setInterval(async () => {
+      if (!EMAIL_TASKS_LIST_ID) return;
+      try {
+        const tok = await getToken();
+        const items = await loadList(EMAIL_TASKS_LIST_ID, null, tok);
+        EMAIL_TASKS_ARR = items.map(i => ({ _spId: i.id, _source: "email", ...i.fields }));
+        if (document.getElementById("tab-tasks").style.display !== "none") {
+          populateAssigneeFilter();
+          renderTasksTable();
+        }
+      } catch(pe) { console.warn("[email-task-poll]", pe.message); }
+    }, 15 * 60 * 1000);
   }
 
   showLoading("Loading calendar events…");
@@ -1073,57 +1180,100 @@ function gotoCase(id)      { showTab("cases");    _selectedCaseId=null;   filter
 // ═══════════════════════════════════════════════
 function populateAssigneeFilter() {
   const sel = document.getElementById("assignee-filter");
-  const names = [...new Set(TASKS_ARR.map(t => t.AssigneeName).filter(Boolean))].sort();
+  const prev = sel.value;
+  while (sel.options.length > 1) sel.remove(1);
+  const mcNames    = TASKS_ARR.map(t => t.AssigneeName).filter(Boolean);
+  const emailNames = EMAIL_TASKS_ARR.map(t => t.Assignee).filter(Boolean);
+  const names = [...new Set([...mcNames, ...emailNames])].sort();
   names.forEach(n => {
     const o = document.createElement("option");
     o.value = n;
     o.textContent = n;
     sel.appendChild(o);
   });
+  if (prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
 }
 
 function renderTasksTable() {
   const status   = document.getElementById("status-filter")?.value   || "incomplete";
   const assignee = document.getElementById("assignee-filter")?.value || "";
+  const source   = document.getElementById("source-filter")?.value   || "";
 
-  let filtered = TASKS_ARR.filter(t => {
-    if (status === "incomplete" && t.Complete) return false;
-    if (status === "done"       && !t.Complete) return false;
-    if (assignee && t.AssigneeName !== assignee) return false;
+  // Normalize both task arrays into a unified shape
+  const all = [
+    ...TASKS_ARR.map(t => ({
+      _spId:    t._spId,
+      _source:  "mc",
+      title:    t.Description || t.Title || "",
+      author:   t.AuthorName || "",
+      assignee: t.AssigneeName || "",
+      dueDate:  t.DueDate || "",
+      caseId:   t.CaseFileID || null,
+      done:     !!t.Complete,
+    })),
+    ...EMAIL_TASKS_ARR.map(t => ({
+      _spId:    t._spId,
+      _source:  "email",
+      title:    t.TaskTitle || t.Title || "",
+      author:   t.AuthorName || "",
+      assignee: t.Assignee || "",
+      dueDate:  t.DueDate || "",
+      caseId:   t.CaseFileID || null,
+      done:     t.Status === "Resolved",
+    })),
+  ];
+
+  let filtered = all.filter(t => {
+    if (status === "incomplete" && t.done) return false;
+    if (status === "done"       && !t.done) return false;
+    if (assignee && t.assignee !== assignee) return false;
+    if (source   && t._source  !== source)  return false;
     return true;
   });
 
-  filtered.sort((a,b) => {
-    if (a.Complete !== b.Complete) return a.Complete ? 1 : -1;
-    return (a.DueDate||"").localeCompare(b.DueDate||"");
+  filtered.sort((a, b) => {
+    if (a.done !== b.done) return a.done ? 1 : -1;
+    return (a.dueDate || "").localeCompare(b.dueDate || "");
   });
 
-  document.getElementById("tasks-count").textContent = `${filtered.length} task${filtered.length!==1?"s":""}`;
+  document.getElementById("tasks-count").textContent = `${filtered.length} task${filtered.length !== 1 ? "s" : ""}`;
 
-  const cs = caseMap;
   const tbody = document.getElementById("tasks-tbody");
+
+  if (!TASKS_LIST_ID && !EMAIL_TASKS_LIST_ID) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:24px;color:#9ca3af">Tasks SP list not yet synced. Run CaseDB-to-SP-List.py to populate.</td></tr>`;
+    return;
+  }
+
   tbody.innerHTML = filtered.map(t => {
-    const done  = t.Complete;
-    const desc  = esc(t.Description || t.Title || "");
-    const due   = t.DueDate ? fmtDue(t.DueDate) : `<span class="due-ok">—</span>`;
-    const cname = t.CaseFileID && caseMap[t.CaseFileID]
-      ? `<a href="#" onclick="gotoCase(${t.CaseFileID});return false" style="color:#1a3a5c">${esc(fmtCaseName(caseMap[t.CaseFileID].Title||""))}</a>`
-      : (t.CaseFileID ? `<span style="color:#9ca3af">Case ${t.CaseFileID}</span>` : `<span style="color:#9ca3af">—</span>`);
-    return `<tr class="${done?"task-done-row":""}">
-      <td><span class="task-check" title="${done?"Mark incomplete":"Mark complete"}" onclick="toggleTask('${t._spId}',${!done})">${done?"✅":"⬜"}</span></td>
-      <td><div class="task-desc${done?" done-text":""}">${desc}</div></td>
+    const done     = t.done;
+    const srcBadge = t._source === "email"
+      ? `<span class="task-source-badge src-email">Email</span>`
+      : `<span class="task-source-badge src-mc">MC</span>`;
+    const title    = esc(t.title);
+    const author   = esc(t.author || "—");
+    const due      = t.dueDate ? fmtDue(t.dueDate) : `<span class="due-ok">—</span>`;
+    const cname    = t.caseId && caseMap[t.caseId]
+      ? `<a href="#" onclick="gotoCase(${t.caseId});return false" style="color:#1a3a5c">${esc(fmtCaseName(caseMap[t.caseId].Title || ""))}</a>`
+      : (t.caseId ? `<span style="color:#9ca3af">Case ${t.caseId}</span>` : `<span style="color:#9ca3af">—</span>`);
+    const toggleFn = t._source === "email"
+      ? `toggleEmailTask('${t._spId}',${!done})`
+      : `toggleTask('${t._spId}',${!done})`;
+    const editFn   = t._source === "email"
+      ? `openEmailTaskModal('${t._spId}')`
+      : `openTaskModal('${t._spId}')`;
+    return `<tr class="${done ? "task-done-row" : ""}">
+      <td><span class="task-check" title="${done ? "Mark incomplete" : "Mark complete"}" onclick="${toggleFn}">${done ? "✅" : "⬜"}</span></td>
+      <td><div class="task-desc${done ? " done-text" : ""}">${srcBadge}${title}</div></td>
+      <td style="color:#6b7280;font-size:12px">${author}</td>
       <td>${due}</td>
       <td>${cname}</td>
-      <td>${esc(t.AssigneeName||"—")}</td>
+      <td>${esc(t.assignee || "—")}</td>
       <td style="white-space:nowrap">
-        <button class="task-action-btn" onclick="openTaskModal('${t._spId}')">Edit</button>
+        <button class="task-action-btn" onclick="${editFn}">Edit</button>
       </td>
     </tr>`;
-  }).join("") || `<tr><td colspan="6" style="text-align:center;padding:24px;color:#9ca3af">No tasks</td></tr>`;
-
-  if (!TASKS_LIST_ID) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:#9ca3af">Tasks SP list not yet synced. Run CaseDB-to-SP-List.py with the Tasks table to populate.</td></tr>`;
-  }
+  }).join("") || `<tr><td colspan="7" style="text-align:center;padding:24px;color:#9ca3af">No tasks</td></tr>`;
 }
 
 function fmtDue(dateStr) {
@@ -1151,6 +1301,22 @@ async function toggleTask(spId, newComplete) {
     if (t) { t.Complete = newComplete; if (newComplete) t.CompleteDate = body.CompleteDate; }
     renderTasksTable();
   } catch(e) { alert("Failed to update task: " + e.message); }
+}
+
+async function toggleEmailTask(spId, newDone) {
+  if (!EMAIL_TASKS_LIST_ID) return;
+  try {
+    const token = await getToken();
+    const url = `${GRAPH}/sites/${SITE_HOST}:${SITE_PATH}:/lists/${EMAIL_TASKS_LIST_ID}/items/${spId}/fields`;
+    const status = newDone ? "Resolved" : "Open";
+    const body = { Status: status };
+    if (newDone) body.ResolvedDate = new Date().toISOString().split("T")[0];
+    const res = await fetch(url, { method:"PATCH", headers:{"Authorization":`Bearer ${token}`,"Content-Type":"application/json"}, body:JSON.stringify(body) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const t = EMAIL_TASKS_ARR.find(t => t._spId === spId);
+    if (t) { t.Status = status; t.ResolvedDate = newDone ? body.ResolvedDate : ""; }
+    renderTasksTable();
+  } catch(e) { alert("Failed to update email task: " + e.message); }
 }
 
 // Task modal
@@ -1252,6 +1418,91 @@ async function deleteTask() {
     document.getElementById("overlay-task-form").classList.remove("active");
     renderTasksTable();
   } catch(e) { btn.disabled=false; alert("Delete failed: " + e.message); }
+}
+
+// ═══════════════════════════════════════════════
+//  EMAIL TASK MODAL
+// ═══════════════════════════════════════════════
+function openEmailTaskModal(spId) {
+  _emailTaskFormSpId = spId;
+  const t = EMAIL_TASKS_ARR.find(t => t._spId === spId);
+  if (!t) return;
+
+  // Read-only meta
+  const fromName  = t.AuthorName  || "";
+  const fromEmail = t.SenderEmail || "";
+  document.getElementById("etf-from").textContent     = fromName && fromEmail ? `${fromName} <${fromEmail}>` : (fromName || fromEmail || "—");
+  document.getElementById("etf-received").textContent = t.EmailReceivedDate
+    ? new Date(t.EmailReceivedDate + "T00:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})
+    : "—";
+
+  // Editable fields
+  document.getElementById("etf-title").value    = t.TaskTitle || "";
+  document.getElementById("etf-due").value      = t.DueDate ? t.DueDate.split("T")[0] : "";
+  document.getElementById("etf-assignee").value = t.Assignee || "";
+  document.getElementById("etf-caseid").value   = t.CaseFileID || "";
+  document.getElementById("etf-priority").value = t.Priority || "Medium";
+  document.getElementById("etf-notes").value    = t.Notes || "";
+  document.getElementById("etf-status").value   = t.Status || "Open";
+
+  setStatus("email-task-form-status", "");
+  document.getElementById("email-task-submit-btn").disabled = false;
+  document.getElementById("overlay-email-task-form").classList.add("active");
+}
+
+function closeEmailTaskModal(e) {
+  if (e && e.target !== document.getElementById("overlay-email-task-form")) return;
+  document.getElementById("overlay-email-task-form").classList.remove("active");
+}
+
+async function submitEmailTask(e) {
+  if (e) e.preventDefault();
+  if (!EMAIL_TASKS_LIST_ID || !_emailTaskFormSpId) return;
+
+  const title    = document.getElementById("etf-title").value.trim();
+  const due      = document.getElementById("etf-due").value;
+  const assignee = document.getElementById("etf-assignee").value.trim();
+  const caseId   = parseInt(document.getElementById("etf-caseid").value) || 0;
+  const priority = document.getElementById("etf-priority").value;
+  const notes    = document.getElementById("etf-notes").value.trim();
+  const status   = document.getElementById("etf-status").value;
+
+  if (!title) { alert("Task title is required."); return; }
+
+  document.getElementById("email-task-submit-btn").disabled = true;
+  setStatus("email-task-form-status", "loading", "Saving…");
+
+  const fields = {
+    TaskTitle:    title,
+    Assignee:     assignee,
+    Priority:     priority,
+    Notes:        notes,
+    Status:       status,
+    CaseFileID:   caseId,
+  };
+  if (due) fields.DueDate = due;
+  if (status === "Resolved") {
+    const existing = EMAIL_TASKS_ARR.find(t => t._spId === _emailTaskFormSpId);
+    fields.ResolvedDate = (existing && existing.ResolvedDate) || new Date().toISOString().split("T")[0];
+  }
+
+  try {
+    const token = await getToken();
+    const url = `${GRAPH}/sites/${SITE_HOST}:${SITE_PATH}:/lists/${EMAIL_TASKS_LIST_ID}/items/${_emailTaskFormSpId}/fields`;
+    const res = await fetch(url, { method:"PATCH", headers:{"Authorization":`Bearer ${token}`,"Content-Type":"application/json"}, body:JSON.stringify(fields) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+    // Update local state
+    const t = EMAIL_TASKS_ARR.find(t => t._spId === _emailTaskFormSpId);
+    if (t) Object.assign(t, fields);
+    setStatus("email-task-form-status", "success", "Saved ✓");
+    setTimeout(() => {
+      document.getElementById("overlay-email-task-form").classList.remove("active");
+      renderTasksTable();
+    }, 900);
+  } catch(err) {
+    setStatus("email-task-form-status", "error", "Failed: " + err.message);
+    document.getElementById("email-task-submit-btn").disabled = false;
+  }
 }
 
 // ═══════════════════════════════════════════════
