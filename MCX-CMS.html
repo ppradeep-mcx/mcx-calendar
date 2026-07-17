@@ -1,0 +1,1449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MCX Legal CMS</title>
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
+<script src="https://unpkg.com/@azure/msal-browser@2.38.3/lib/msal-browser.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:14px;color:#1f2937;background:#f3f4f6;height:100vh;overflow:hidden;display:flex;flex-direction:column}
+
+/* ── HEADER ── */
+#hdr{background:#1a3a5c;color:#fff;height:52px;display:flex;align-items:center;padding:0 20px;gap:8px;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+#hdr .logo{font-size:18px;font-weight:700;letter-spacing:.5px;margin-right:8px;white-space:nowrap}
+.tab-btn{background:none;border:none;color:rgba(255,255,255,.7);font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;cursor:pointer;transition:background .15s,color .15s;white-space:nowrap}
+.tab-btn:hover{background:rgba(255,255,255,.15);color:#fff}
+.tab-btn.active{background:rgba(255,255,255,.22);color:#fff}
+.hdr-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+.user-badge{font-size:12px;opacity:.8;white-space:nowrap}
+.btn-signout{background:transparent;color:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.3);border-radius:5px;padding:4px 10px;font-size:12px;cursor:pointer;transition:all .15s}
+.btn-signout:hover{background:rgba(255,255,255,.1);color:#fff}
+
+/* ── LOADING OVERLAY ── */
+#loading-overlay{position:fixed;inset:0;background:rgba(243,244,246,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:3000;gap:14px}
+.spinner{width:36px;height:36px;border:4px solid #d1d5db;border-top-color:#1a3a5c;border-radius:50%;animation:spin .75s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#loading-msg{font-size:14px;color:#374151}
+
+/* ── AUTH SCREEN ── */
+#screen-auth{position:fixed;inset:0;background:#f0f2f5;display:flex;align-items:center;justify-content:center;z-index:2000}
+.auth-card{background:#fff;border-radius:10px;box-shadow:0 4px 24px rgba(0,0,0,.1);width:360px;overflow:hidden;text-align:center}
+.auth-header{background:#1a3a5c;color:#fff;padding:28px 24px}
+.auth-header .firm{font-size:10px;letter-spacing:2px;text-transform:uppercase;opacity:.6}
+.auth-header h1{font-size:20px;font-weight:600;margin-top:4px}
+.auth-body{padding:28px 24px}
+.auth-body p{color:#555;font-size:14px;margin-bottom:20px;line-height:1.5}
+.btn-ms{background:#0078d4;color:#fff;border:none;border-radius:6px;padding:11px 24px;font-size:14px;cursor:pointer;width:100%;display:flex;align-items:center;justify-content:center;gap:10px;transition:background .15s}
+.btn-ms:hover{background:#005a9e}
+.btn-ms svg{width:18px;height:18px}
+
+/* ── MAIN CONTENT ── */
+#app{display:none;flex:1;overflow:hidden;flex-direction:column}
+#content{flex:1;overflow:hidden;display:flex}
+
+/* ── SIDEBAR + MAIN PANEL ── */
+.sidebar{width:300px;min-width:300px;background:#fff;border-right:1px solid #e5e7eb;display:flex;flex-direction:column;overflow:hidden}
+.sidebar-header{padding:12px;border-bottom:1px solid #e5e7eb;flex-shrink:0}
+.search-box{width:100%;padding:8px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;outline:none}
+.search-box:focus{border-color:#1a3a5c;box-shadow:0 0 0 2px rgba(26,58,92,.15)}
+.sidebar-filters{display:flex;gap:6px;margin-top:8px}
+.filter-select{flex:1;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;outline:none;background:#fff}
+.sidebar-list{flex:1;overflow-y:auto;padding:4px 0}
+.list-item{padding:10px 14px;cursor:pointer;border-bottom:1px solid #f3f4f6;transition:background .1s;display:flex;flex-direction:column;gap:3px}
+.list-item:hover{background:#f8fafc}
+.list-item.selected{background:#eff6ff;border-left:3px solid #1a3a5c}
+.list-item-name{font-weight:500;font-size:13px;line-height:1.3}
+.list-item-sub{font-size:11px;color:#6b7280;display:flex;align-items:center;gap:6px}
+.main-panel{flex:1;overflow-y:auto;padding:20px;background:#f3f4f6}
+.placeholder{display:flex;align-items:center;justify-content:center;height:100%;color:#9ca3af;font-size:15px}
+
+/* ── CARDS ── */
+.card{background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-bottom:16px;overflow:hidden}
+.card-title{font-size:12px;font-weight:600;color:#4b5563;text-transform:uppercase;letter-spacing:.6px;padding:12px 16px;border-bottom:1px solid #f3f4f6}
+.card-body{padding:16px}
+.case-header{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;padding:16px;border-bottom:1px solid #f3f4f6}
+.case-title{font-size:19px;font-weight:700;color:#1a3a5c;flex:1}
+.case-side{font-size:12px;color:#6b7280;margin-top:4px;text-transform:capitalize}
+.info-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+.info-item label{font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:3px}
+.info-item span{font-size:13px;color:#1f2937}
+.comments-block{margin-top:12px}
+.comments-block label{font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:6px}
+.comments-block pre{font-family:inherit;font-size:13px;color:#374151;white-space:pre-wrap;background:#f9fafb;border-radius:6px;padding:10px;line-height:1.5}
+
+/* ── STATUS BADGES ── */
+.badge{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:12px}
+.badge-open{background:#dcfce7;color:#166534}
+.badge-closed{background:#f3f4f6;color:#6b7280}
+.badge-pending{background:#fef9c3;color:#854d0e}
+.badge-intake{background:#dbeafe;color:#1e40af}
+.badge-other{background:#f3e8ff;color:#7e22ce}
+
+/* ── PARTIES (contact cards) ── */
+.party-cards{display:flex;flex-wrap:wrap;gap:10px}
+.party-card{background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:12px 14px;min-width:200px;max-width:280px;cursor:pointer;transition:border-color .15s,box-shadow .15s}
+.party-card:hover{border-color:#1a3a5c;box-shadow:0 2px 8px rgba(26,58,92,.12)}
+.party-role{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px}
+.party-name{font-weight:600;font-size:13px;margin-bottom:3px}
+.party-co{font-size:12px;color:#6b7280}
+.party-phone{font-size:12px;color:#374151;margin-top:4px}
+.party-claim{font-size:11px;color:#9ca3af;margin-top:3px}
+
+/* ── INJURIES ── */
+.injury-row{padding:12px 0;border-bottom:1px solid #f3f4f6}
+.injury-row:last-child{border-bottom:none}
+.injury-header{display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap}
+.injury-type-badge{font-size:11px;font-weight:600;padding:2px 8px;border-radius:12px;background:#dbeafe;color:#1e40af}
+.injury-date{font-weight:600;font-size:13px}
+.injury-meta{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-top:8px}
+.injury-meta-item label{font-size:10px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.4px;display:block}
+.injury-meta-item span{font-size:12px;color:#374151}
+
+/* ── TABLES ── */
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:8px 10px;font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;border-bottom:2px solid #f3f4f6;background:#f9fafb}
+td{padding:9px 10px;border-bottom:1px solid #f3f4f6;vertical-align:top}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#f8fafc}
+
+/* ── TASKS TAB ── */
+#tab-tasks{flex:1;overflow:hidden;display:none;flex-direction:column}
+.tasks-toolbar{display:flex;align-items:center;gap:10px;padding:14px 20px;background:#fff;border-bottom:1px solid #e5e7eb;flex-shrink:0;flex-wrap:wrap}
+.tasks-toolbar h2{font-size:16px;font-weight:700;color:#1a3a5c;margin-right:4px}
+.tasks-count{font-size:13px;color:#9ca3af}
+.tasks-toolbar .spacer{flex:1}
+.tasks-wrap{flex:1;overflow-y:auto;padding:16px 20px}
+.tasks-table{width:100%;border-collapse:collapse;font-size:13px;background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);overflow:hidden}
+.tasks-table th{padding:10px 12px;text-align:left;font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;border-bottom:2px solid #f3f4f6;background:#f9fafb;white-space:nowrap}
+.tasks-table td{padding:10px 12px;border-bottom:1px solid #f3f4f6;vertical-align:middle}
+.tasks-table tr:last-child td{border-bottom:none}
+.tasks-table tr:hover td{background:#f8fafc}
+.task-done-row td{opacity:.55}
+.task-check{cursor:pointer;font-size:16px;user-select:none;white-space:nowrap}
+.task-check:hover{opacity:.75}
+.task-desc{max-width:360px;line-height:1.4}
+.task-desc.done-text{text-decoration:line-through;color:#9ca3af}
+.due-overdue{color:#dc2626;font-weight:600}
+.due-soon{color:#d97706;font-weight:600}
+.due-ok{color:#6b7280}
+.task-action-btn{background:none;border:1px solid #d1d5db;border-radius:5px;padding:3px 9px;font-size:12px;cursor:pointer;transition:all .15s;color:#374151}
+.task-action-btn:hover{background:#f3f4f6;border-color:#9ca3af}
+.task-action-btn.danger:hover{background:#fee2e2;border-color:#fca5a5;color:#dc2626}
+
+/* ── CALENDAR TAB ── */
+#tab-calendar{flex:1;overflow:hidden;display:none;flex-direction:column}
+.cal-toolbar{display:flex;align-items:center;gap:10px;padding:10px 20px;background:#fff;border-bottom:1px solid #e5e7eb;flex-shrink:0;flex-wrap:wrap}
+.cal-legend{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:12px;color:#555}
+.legend-dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:3px}
+#cal-wrap{flex:1;padding:14px 20px;overflow:hidden;display:flex;flex-direction:column}
+#calendar{flex:1;min-height:0}
+.fc{height:100%!important;font-family:inherit}
+.fc .fc-toolbar-title{font-size:15px;font-weight:600}
+.fc .fc-button-primary{background:#1a3a5c;border-color:#1a3a5c;font-size:12px}
+.fc .fc-button-primary:hover{background:#243f5e;border-color:#243f5e}
+.fc .fc-button-primary:not(:disabled).fc-button-active{background:#c45911;border-color:#c45911}
+.fc .fc-event{cursor:pointer;border:none!important;border-radius:3px;font-size:11px}
+.fc .fc-day-today{background:rgba(196,89,17,.05)!important}
+.fc .fc-col-header-cell{background:#f8fafc}
+
+/* ── MODALS ── */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center}
+.overlay.active{display:flex}
+.modal{background:#fff;border-radius:10px;box-shadow:0 8px 40px rgba(0,0,0,.2);width:100%;max-height:90vh;overflow-y:auto}
+.modal-sm{max-width:440px}
+.modal-md{max-width:580px}
+.modal-header{padding:18px 22px 14px;border-bottom:1px solid #e5e7eb;display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.modal-header h2{font-size:16px;font-weight:600}
+.modal-body{padding:18px 22px}
+.modal-footer{padding:14px 22px;border-top:1px solid #e5e7eb;display:flex;gap:10px;justify-content:flex-end}
+.btn-close{background:none;border:none;cursor:pointer;color:#9ca3af;font-size:20px;line-height:1;padding:0;flex-shrink:0;transition:color .15s}
+.btn-close:hover{color:#374151}
+.form-row{margin-bottom:14px}
+.form-row label{display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:4px}
+.form-row label .req{color:#dc2626;margin-left:2px}
+.form-row input,.form-row select,.form-row textarea{width:100%;border:1px solid #d1d5db;border-radius:6px;padding:8px 10px;font-size:13px;color:#111;background:#fff;font-family:inherit;transition:border .15s,box-shadow .15s}
+.form-row input:focus,.form-row select:focus,.form-row textarea:focus{outline:none;border-color:#1a3a5c;box-shadow:0 0 0 3px rgba(26,58,92,.1)}
+.form-row textarea{resize:vertical;min-height:68px}
+.form-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.btn-primary{background:#1a3a5c;color:#fff;border:none;border-radius:6px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;transition:background .15s}
+.btn-primary:hover:not(:disabled){background:#243f5e}
+.btn-primary:disabled{opacity:.55;cursor:not-allowed}
+.btn-secondary{background:#fff;color:#374151;border:1px solid #d1d5db;border-radius:6px;padding:9px 18px;font-size:13px;cursor:pointer;transition:background .15s}
+.btn-secondary:hover{background:#f9fafb}
+.btn-danger{background:#dc2626;color:#fff;border:none;border-radius:6px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;transition:background .15s;margin-right:auto}
+.btn-danger:hover:not(:disabled){background:#b91c1c}
+.btn-danger:disabled{background:#fca5a5;cursor:not-allowed}
+.btn-orange{background:#c45911;color:#fff;border:none;border-radius:6px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;transition:background .15s}
+.btn-orange:hover{background:#a34010}
+.status-msg{border-radius:6px;padding:9px 12px;font-size:12px;margin-top:12px;display:none;line-height:1.4}
+.status-msg.loading{background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe;display:block}
+.status-msg.success{background:#dcfce7;color:#166534;border:1px solid #bbf7d0;display:block}
+.status-msg.error{background:#fee2e2;color:#991b1b;border:1px solid #fecaca;display:block}
+/* detail modal rows */
+.detail-row{display:flex;gap:12px;margin-bottom:12px;font-size:13px}
+.detail-row .label{font-weight:600;color:#374151;min-width:100px;flex-shrink:0}
+.detail-row .val{color:#111;line-height:1.5}
+.detail-row .val.muted{color:#9ca3af;font-style:italic}
+.event-type-chip{font-size:11px;font-weight:600;padding:2px 8px;border-radius:12px;color:#fff}
+</style>
+</head>
+<body>
+
+<!-- ── AUTH SCREEN ── -->
+<div id="screen-auth">
+  <div class="auth-card">
+    <div class="auth-header">
+      <div class="firm">Mishra X LLP</div>
+      <h1>MCX Legal CMS</h1>
+    </div>
+    <div class="auth-body">
+      <p>Sign in with your <strong>@mishrax.com</strong> Microsoft account to access the case management system.</p>
+      <button class="btn-ms" onclick="signIn()">
+        <svg viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg">
+          <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
+          <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
+          <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
+          <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+        </svg>
+        Sign in with Microsoft
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── LOADING OVERLAY ── -->
+<div id="loading-overlay" style="display:none">
+  <div class="spinner"></div>
+  <div id="loading-msg">Loading data…</div>
+</div>
+
+<!-- ── MAIN APP ── -->
+<div id="app">
+  <div id="hdr">
+    <div class="logo">MCX Legal CMS</div>
+    <button class="tab-btn active" onclick="showTab('cases')"   id="tbtn-cases">Cases</button>
+    <button class="tab-btn"        onclick="showTab('contacts')" id="tbtn-contacts">Contacts</button>
+    <button class="tab-btn"        onclick="showTab('tasks')"    id="tbtn-tasks">Tasks</button>
+    <button class="tab-btn"        onclick="showTab('calendar')" id="tbtn-calendar">Firm Calendar</button>
+    <div class="hdr-right">
+      <span class="user-badge" id="topbar-user"></span>
+      <button class="btn-signout" onclick="signOut()">Sign out</button>
+    </div>
+  </div>
+
+  <div id="content">
+
+    <!-- ── CASES TAB ── -->
+    <div id="tab-cases" style="display:flex;flex:1;overflow:hidden">
+      <div class="sidebar">
+        <div class="sidebar-header">
+          <input class="search-box" id="case-search" placeholder="Search cases…" oninput="filterCases()">
+        </div>
+        <div class="sidebar-list" id="case-list"></div>
+      </div>
+      <div class="main-panel" id="case-detail">
+        <div class="placeholder">Select a case from the list</div>
+      </div>
+    </div>
+
+    <!-- ── CONTACTS TAB ── -->
+    <div id="tab-contacts" style="display:none;flex:1;overflow:hidden">
+      <div class="sidebar">
+        <div class="sidebar-header">
+          <input class="search-box" id="contact-search" placeholder="Search contacts…" oninput="filterContacts()">
+          <div class="sidebar-filters">
+            <select class="filter-select" id="role-filter" onchange="filterContacts()">
+              <option value="">All Roles</option>
+            </select>
+          </div>
+        </div>
+        <div class="sidebar-list" id="contact-list"></div>
+      </div>
+      <div class="main-panel" id="contact-detail">
+        <div class="placeholder">Select a contact from the list</div>
+      </div>
+    </div>
+
+    <!-- ── TASKS TAB ── -->
+    <div id="tab-tasks">
+      <div class="tasks-toolbar">
+        <h2>Tasks</h2>
+        <span class="tasks-count" id="tasks-count"></span>
+        <select class="filter-select" style="width:140px" id="status-filter" onchange="renderTasksTable()">
+          <option value="incomplete">Incomplete</option>
+          <option value="done">Done</option>
+          <option value="all">All</option>
+        </select>
+        <select class="filter-select" style="width:160px" id="assignee-filter" onchange="renderTasksTable()">
+          <option value="">All Assignees</option>
+        </select>
+        <div class="spacer"></div>
+        <button class="btn-orange" onclick="openTaskModal()">+ Add Task</button>
+      </div>
+      <div class="tasks-wrap">
+        <table class="tasks-table">
+          <thead>
+            <tr>
+              <th style="width:36px"></th>
+              <th>Description</th>
+              <th style="width:110px">Due Date</th>
+              <th style="width:200px">Case</th>
+              <th style="width:140px">Assignee</th>
+              <th style="width:100px">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="tasks-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ── CALENDAR TAB ── -->
+    <div id="tab-calendar">
+      <div class="cal-toolbar">
+        <div class="cal-legend">
+          <span style="font-weight:600;color:#4b5563;font-size:11px;text-transform:uppercase;letter-spacing:.5px;margin-right:2px">EVENT TYPE:</span>
+          <span><span class="legend-dot" style="background:#dc2626"></span>Deposition</span>
+          <span><span class="legend-dot" style="background:#2563eb"></span>MSC</span>
+          <span><span class="legend-dot" style="background:#7c3aed"></span>Trial</span>
+          <span><span class="legend-dot" style="background:#059669"></span>QME</span>
+          <span><span class="legend-dot" style="background:#0d9488"></span>IME</span>
+          <span><span class="legend-dot" style="background:#d97706"></span>Hearing</span>
+          <span><span class="legend-dot" style="background:#9333ea"></span>Arbitration</span>
+          <span><span class="legend-dot" style="background:#0891b2"></span>Mediation</span>
+          <span><span class="legend-dot" style="background:#6b7280"></span>Other</span>
+        </div>
+        <div style="margin-left:auto">
+          <button class="btn-orange" onclick="openCalAddModal()">+ Add Event</button>
+        </div>
+      </div>
+      <div id="cal-wrap">
+        <div id="calendar"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     MODALS
+═══════════════════════════════════════════════ -->
+
+<!-- Event Detail -->
+<div class="overlay" id="overlay-cal-detail" onclick="closeCalDetail(event)">
+  <div class="modal modal-md" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <div>
+        <h2 id="cal-det-title"></h2>
+        <div style="margin-top:5px;display:flex;gap:8px;align-items:center">
+          <span class="event-type-chip" id="cal-det-chip"></span>
+          <span style="font-size:12px;color:#888" id="cal-det-datetime"></span>
+        </div>
+      </div>
+      <button class="btn-close" onclick="closeCalDetail()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="detail-row"><div class="label">Case</div><div class="val" id="cal-det-case"></div></div>
+      <div class="detail-row"><div class="label">Case File ID</div><div class="val" id="cal-det-fileid"></div></div>
+      <div class="detail-row"><div class="label">Location</div><div class="val" id="cal-det-location"></div></div>
+      <div class="detail-row"><div class="label">Assignees</div><div class="val" id="cal-det-assignees"></div></div>
+      <div class="detail-row"><div class="label">Notes</div><div class="val" id="cal-det-notes" style="white-space:pre-wrap"></div></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-danger" id="cal-det-delete-btn" onclick="deleteCalEvent()">Delete</button>
+      <button class="btn-secondary" onclick="openCalEditModal()">Edit</button>
+      <button class="btn-secondary" onclick="closeCalDetail()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add / Edit Event -->
+<div class="overlay" id="overlay-cal-form" onclick="closeCalFormModal(event)">
+  <div class="modal modal-md" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h2 id="cal-form-title">Add Event</h2>
+      <button class="btn-close" onclick="closeCalFormModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <form id="cal-form" onsubmit="submitCalEvent(event)">
+        <div class="form-row">
+          <label>Title <span class="req">*</span></label>
+          <input type="text" id="cf-title" required>
+        </div>
+        <div class="form-grid-2">
+          <div class="form-row">
+            <label>Event Type <span class="req">*</span></label>
+            <select id="cf-type" required>
+              <option value="">— Select —</option>
+              <option>Deposition</option><option>MSC</option><option>Trial</option>
+              <option>QME Appointment</option><option>IME Appointment</option>
+              <option>Hearing</option><option>Arbitration</option>
+              <option>Conference Call</option><option>Mediation</option><option>Other</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label>Assignees</label>
+            <input type="text" id="cf-assignees" placeholder="Aneeta Mishra, Timothy Chan">
+          </div>
+        </div>
+        <div class="form-grid-2">
+          <div class="form-row">
+            <label>Case Name</label>
+            <input type="text" id="cf-casename">
+          </div>
+          <div class="form-row">
+            <label>Case File ID</label>
+            <input type="text" id="cf-casefileid">
+          </div>
+        </div>
+        <div class="form-grid-2">
+          <div class="form-row">
+            <label>Start Date <span class="req">*</span></label>
+            <input type="date" id="cf-start-date" required>
+          </div>
+          <div class="form-row">
+            <label>Start Time</label>
+            <select id="cf-start-time"></select>
+          </div>
+        </div>
+        <div class="form-grid-2">
+          <div class="form-row">
+            <label>End Date</label>
+            <input type="date" id="cf-end-date">
+          </div>
+          <div class="form-row">
+            <label>End Time</label>
+            <select id="cf-end-time"></select>
+          </div>
+        </div>
+        <div class="form-row">
+          <label>Location</label>
+          <input type="text" id="cf-location">
+        </div>
+        <div class="form-row">
+          <label>Notes</label>
+          <textarea id="cf-notes" rows="3"></textarea>
+        </div>
+        <div class="status-msg" id="cal-form-status"></div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeCalFormModal()">Cancel</button>
+      <button class="btn-primary" id="cal-form-submit-btn" onclick="submitCalEvent(event)">Save Event</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add / Edit Task -->
+<div class="overlay" id="overlay-task-form" onclick="closeTaskModal(event)">
+  <div class="modal modal-md" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h2 id="task-form-title">Add Task</h2>
+      <button class="btn-close" onclick="closeTaskModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <form id="task-form" onsubmit="submitTask(event)">
+        <div class="form-row">
+          <label>Description <span class="req">*</span></label>
+          <textarea id="tf-desc" rows="3" required></textarea>
+        </div>
+        <div class="form-grid-2">
+          <div class="form-row">
+            <label>Due Date</label>
+            <input type="date" id="tf-due">
+          </div>
+          <div class="form-row">
+            <label>Assignee Name</label>
+            <input type="text" id="tf-assignee" placeholder="e.g. Aneeta Mishra">
+          </div>
+        </div>
+        <div class="form-grid-2">
+          <div class="form-row">
+            <label>Case File ID</label>
+            <input type="number" id="tf-caseid" placeholder="MerusCase File ID">
+          </div>
+          <div class="form-row">
+            <label>Priority (1=High, 3=Normal, 5=Low)</label>
+            <select id="tf-priority">
+              <option value="1">1 — High</option>
+              <option value="2">2 — Above Normal</option>
+              <option value="3" selected>3 — Normal</option>
+              <option value="4">4 — Below Normal</option>
+              <option value="5">5 — Low</option>
+            </select>
+          </div>
+        </div>
+        <div class="status-msg" id="task-form-status"></div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-danger" id="task-delete-btn" onclick="deleteTask()" style="display:none">Delete</button>
+      <button class="btn-secondary" onclick="closeTaskModal()">Cancel</button>
+      <button class="btn-primary" id="task-submit-btn" onclick="submitTask(event)">Save Task</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════
+//  CONFIG
+// ═══════════════════════════════════════════════
+const CLIENT_ID  = "28eec654-6fc8-457b-86c7-e164cafe4aa1";
+const TENANT_ID  = "5dd8c0ee-d37a-47a1-bb5e-8521f1be863a";
+const SITE_HOST  = "mishrax.sharepoint.com";
+const SITE_PATH  = "/sites/cms";
+const SCOPES     = ["https://graph.microsoft.com/Sites.ReadWrite.All"];
+const GRAPH      = "https://graph.microsoft.com/v1.0";
+
+const LIST_IDS = {
+  cases:      "d47ad56f-79bb-4b32-ad52-e0433b97d209",
+  injuries:   "90a3b1ba-b569-4b44-bc0e-861edfd4370e",
+  staff:      "221e1d1c-3c00-4a21-a488-afe2e09ac8df",
+  contacts:   "df5b9574-7e7b-408b-a41c-c5023d661ec4",
+  parties:    "93bcba5f-c6ae-4a11-bfdf-054df6f02e5d",
+  firmEvents: "196ef90f-a328-4ba2-9307-cfe9c7b203fe",
+  tasks:      null,  // populated after first list-names lookup
+};
+
+// Role IDs → names (MerusCase people_type_id)
+const ROLES = {
+  771755:"Applicant",771757:"Defense Attorney",771758:"Carrier",771760:"Doctor",
+  771761:"QME",771762:"Panel QME",771763:"AME",771764:"Claims Adjuster",
+  771765:"Defendant",771766:"Plaintiff",771767:"PTP",771768:"QME (Defense)",
+  771769:"Nurse Case Manager",771778:"Carrier (Defendant)",771782:"TPA",
+  771783:"Dentist",771784:"Beneficiary",771844:"Employer",771846:"Hearing Judge",
+  771850:"Lien Claimant",771851:"Other",771853:"Referral Source (Inbound)",
+  771854:"Referral (Outbound)",771855:"Attorney"
+};
+const ROLE_COLORS = {
+  771755:"#1e40af",771757:"#7c3aed",771758:"#059669",771778:"#059669",
+  771844:"#d97706",771782:"#0891b2",771760:"#dc2626",771767:"#dc2626",
+  771761:"#9333ea",771762:"#9333ea",771763:"#0d9488"
+};
+
+const EVENT_COLORS = {
+  "Deposition":"#dc2626","MSC":"#2563eb","Trial":"#7c3aed",
+  "QME Appointment":"#059669","IME Appointment":"#0d9488","Hearing":"#d97706",
+  "Arbitration":"#9333ea","Conference Call":"#6b7280","Mediation":"#0891b2"
+};
+const defaultEventColor = "#374151";
+
+// ═══════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════
+let currentAccount = null;
+let STAFF_MAP = {};   // userID → full name
+let CASES_ARR = [];
+let caseMap   = {};
+let partiesMap = {};
+let injuriesMap = {};
+let contactMap = {};
+let tasksMap   = {};   // caseFileID → [task, …]
+let TASKS_ARR  = [];
+let TASKS_LIST_ID = null;  // discovered at runtime
+
+let fcCalendar = null;
+let _calDetailEvent = null;  // FullCalendar event object currently shown in detail modal
+let _editingTaskId  = null;  // SP item id of task being edited (null = new task)
+
+// ═══════════════════════════════════════════════
+//  MSAL
+// ═══════════════════════════════════════════════
+const msalConfig = {
+  auth: {
+    clientId: CLIENT_ID,
+    authority: `https://login.microsoftonline.com/${TENANT_ID}`,
+    redirectUri: window.location.href.split("?")[0].split("#")[0]
+  },
+  cache: { cacheLocation: "sessionStorage", storeAuthStateInCookie: false }
+};
+const msalInstance = new msal.PublicClientApplication(msalConfig);
+
+window.addEventListener("load", async () => {
+  buildCalTimeOptions("cf-start-time", "All Day");
+  buildCalTimeOptions("cf-end-time",   "— None —");
+  await msalInstance.initialize();
+  const accounts = msalInstance.getAllAccounts();
+  if (accounts.length > 0) await initApp(accounts[0]);
+});
+
+async function signIn() {
+  try {
+    const r = await msalInstance.loginPopup({ scopes: SCOPES });
+    await initApp(r.account);
+  } catch(e) {
+    if (e.errorCode !== "user_cancelled") alert("Sign-in failed: " + e.message);
+  }
+}
+
+async function signOut() {
+  msalInstance.logoutPopup({ account: currentAccount }).then(() => {
+    currentAccount = null;
+    document.getElementById("app").style.display = "none";
+    document.getElementById("screen-auth").style.display = "flex";
+  });
+}
+
+async function getToken() {
+  try {
+    const r = await msalInstance.acquireTokenSilent({ scopes: SCOPES, account: currentAccount });
+    return r.accessToken;
+  } catch {
+    const r = await msalInstance.acquireTokenPopup({ scopes: SCOPES, account: currentAccount });
+    return r.accessToken;
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════
+async function initApp(account) {
+  currentAccount = account;
+  document.getElementById("screen-auth").style.display = "none";
+  document.getElementById("topbar-user").textContent = account.name || account.username;
+  showLoading("Signing in…");
+
+  try {
+    await loadAllData();
+    buildIndexes();
+    populateRoleFilter();
+    populateAssigneeFilter();
+    document.getElementById("loading-overlay").style.display = "none";
+    document.getElementById("app").style.display = "flex";
+    document.getElementById("app").style.flexDirection = "column";
+    showTab("cases");
+  } catch(err) {
+    document.getElementById("loading-overlay").style.display = "none";
+    alert("Failed to load data: " + err.message);
+    console.error(err);
+  }
+}
+
+function showLoading(msg) {
+  document.getElementById("loading-msg").textContent = msg;
+  document.getElementById("loading-overlay").style.display = "flex";
+}
+
+// ═══════════════════════════════════════════════
+//  DATA LOADING — paginated Graph API calls
+// ═══════════════════════════════════════════════
+async function loadList(listId, fields, token) {
+  let url = `${GRAPH}/sites/${SITE_HOST}:${SITE_PATH}:/lists/${listId}/items?$expand=fields&$top=5000`;
+  if (fields) url += `&$select=id,fields/${fields.join(",fields/")}`;
+  let items = [];
+  while (url) {
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) throw new Error(`SP list ${listId}: HTTP ${res.status}`);
+    const d = await res.json();
+    items = items.concat(d.value || []);
+    url = d["@odata.nextLink"] || null;
+  }
+  return items;
+}
+
+async function findTasksListId(token) {
+  const url = `${GRAPH}/sites/${SITE_HOST}:${SITE_PATH}:/lists?$select=id,name`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) return null;
+  const d = await res.json();
+  const found = (d.value || []).find(l => l.name === "Tasks");
+  return found ? found.id : null;
+}
+
+async function loadAllData() {
+  const token = await getToken();
+
+  showLoading("Loading staff…");
+  const staffItems = await loadList(LIST_IDS.staff, null, token);
+  STAFF_MAP = {};
+  staffItems.forEach(i => {
+    const f = i.fields;
+    const uid = f.UserID;
+    if (uid) STAFF_MAP[uid] = ((f.FirstName || "") + " " + (f.LastName || "")).trim() || `User ${uid}`;
+  });
+
+  showLoading("Loading cases…");
+  const caseItems = await loadList(LIST_IDS.cases, null, token);
+  CASES_ARR = caseItems.map(i => ({ _spId: i.id, ...i.fields }));
+
+  showLoading("Loading injuries…");
+  const injItems = await loadList(LIST_IDS.injuries, null, token);
+  const INJ_ARR = injItems.map(i => ({ _spId: i.id, ...i.fields }));
+
+  showLoading("Loading contacts…");
+  const contactItems = await loadList(LIST_IDS.contacts, null, token);
+  const CONTACTS_ARR = contactItems.map(i => ({ _spId: i.id, ...i.fields }));
+
+  showLoading("Loading parties…");
+  const partyItems = await loadList(LIST_IDS.parties, null, token);
+  const PARTIES_ARR = partyItems.map(i => ({ _spId: i.id, ...i.fields }));
+
+  showLoading("Loading tasks…");
+  TASKS_LIST_ID = await findTasksListId(token);
+  if (TASKS_LIST_ID) {
+    const taskItems = await loadList(TASKS_LIST_ID, null, token);
+    TASKS_ARR = taskItems.map(i => ({ _spId: i.id, ...i.fields }));
+  } else {
+    TASKS_ARR = [];
+  }
+
+  showLoading("Loading calendar events…");
+  // Calendar events loaded on-demand when tab is opened; store raw array here
+  window._rawFirmEvents = await loadList(LIST_IDS.firmEvents, null, token);
+
+  // Build indexes
+  function buildMap(arr, key) {
+    const m = {};
+    arr.forEach(o => {
+      const k = o[key];
+      if (k != null) { if (!m[k]) m[k] = []; m[k].push(o); }
+    });
+    return m;
+  }
+  partiesMap   = buildMap(PARTIES_ARR, "CaseFileID");
+  injuriesMap  = buildMap(INJ_ARR,     "CaseFileID");
+  tasksMap     = buildMap(TASKS_ARR,   "CaseFileID");
+
+  // contactMap: ContactID → enriched object
+  contactMap = {};
+  CONTACTS_ARR.forEach(c => {
+    contactMap[c.ContactID] = {
+      ...c,
+      addr: [c.Address, c.City, c.State, c.Zip].filter(Boolean).join(", "),
+      cases: []
+    };
+  });
+  PARTIES_ARR.forEach(p => {
+    const co = contactMap[p.ContactID];
+    if (co) co.cases.push({ cid: p.CaseFileID, role: p.PeopleTypeID, detail: p.PeopleTypeDetail, claim: p.InsuranceClaimNumber, alt_claim: p.AlternateInsuranceClaimNumber });
+  });
+}
+
+function buildIndexes() {
+  caseMap = {};
+  CASES_ARR.forEach(c => { if (c.CaseID) caseMap[c.CaseID] = c; });
+}
+
+// ═══════════════════════════════════════════════
+//  TAB SWITCHING
+// ═══════════════════════════════════════════════
+let _calInitialized = false;
+function showTab(name) {
+  ["cases","contacts","tasks","calendar"].forEach(t => {
+    const panel = document.getElementById(`tab-${t}`);
+    const btn   = document.getElementById(`tbtn-${t}`);
+    panel.style.display = "none";
+    btn.classList.remove("active");
+  });
+  const el = document.getElementById(`tab-${name}`);
+  el.style.display = (name === "tasks" || name === "calendar") ? "flex" : "flex";
+  document.getElementById(`tbtn-${name}`).classList.add("active");
+
+  if (name === "cases")    { renderCaseList(CASES_ARR); }
+  if (name === "contacts") { renderContactList(filteredContacts()); }
+  if (name === "tasks")    { renderTasksTable(); }
+  if (name === "calendar") { initOrRefreshCalendar(); }
+}
+
+// ═══════════════════════════════════════════════
+//  CASES TAB
+// ═══════════════════════════════════════════════
+function fmtCaseName(name) {
+  if (!name) return "";
+  const m = name.match(/^([^,]+),\s*(.+?)\s+v\.\s+(.+)$/);
+  return m ? `${m[2]} ${m[1]} v. ${m[3]}` : name;
+}
+
+function statusBadge(s) {
+  const sl = (s || "").toLowerCase();
+  let cls = "badge-other";
+  if (sl === "open")   cls = "badge-open";
+  else if (sl === "closed" || sl === "destroyed" || sl === "archived" || sl === "dismissed") cls = "badge-closed";
+  else if (sl === "pending" || sl === "hold") cls = "badge-pending";
+  else if (sl === "intake") cls = "badge-intake";
+  return `<span class="badge ${cls}">${s || "—"}</span>`;
+}
+
+function filterCases() {
+  const q = (document.getElementById("case-search").value || "").toLowerCase();
+  const filtered = q
+    ? CASES_ARR.filter(c => (c.Title||"").toLowerCase().includes(q) || (c.PrincipalClaimNumber||"").toLowerCase().includes(q) || String(c.FileNumber||"").toLowerCase().includes(q))
+    : CASES_ARR;
+  renderCaseList(filtered);
+}
+
+let _selectedCaseId = null;
+function renderCaseList(arr) {
+  const el = document.getElementById("case-list");
+  if (!arr.length) { el.innerHTML = `<div style="padding:16px;color:#9ca3af;font-size:13px">No cases found</div>`; return; }
+  el.innerHTML = arr.map(c => `
+    <div class="list-item${_selectedCaseId===c.CaseID?" selected":""}" onclick="selectCase(${c.CaseID})">
+      <div class="list-item-name">${fmtCaseName(c.Title||"")}</div>
+      <div class="list-item-sub">${statusBadge(c.CaseStatus)} ${c.PrincipalClaimNumber ? `<span>${c.PrincipalClaimNumber}</span>` : ""}</div>
+    </div>`).join("");
+}
+
+function selectCase(id) {
+  _selectedCaseId = id;
+  // re-highlight in list
+  document.querySelectorAll("#case-list .list-item").forEach(el => {
+    const onclick = el.getAttribute("onclick") || "";
+    el.classList.toggle("selected", onclick.includes(`(${id})`));
+  });
+  const c = caseMap[id];
+  if (!c) return;
+  const panel = document.getElementById("case-detail");
+  const parties   = partiesMap[id] || [];
+  const injuries  = injuriesMap[id] || [];
+  const caseTasks = tasksMap[id] || [];
+
+  const infoItems = [
+    ["Claim #",          c.PrincipalClaimNumber],
+    ["File #",           c.FileNumber],
+    ["Case Status",      c.CaseStatus],
+    ["Side",             c.SideRepresented],
+    ["Attorney (R)",     STAFF_MAP[c.AttorneyResponsibleID] || (c.AttorneyResponsibleID ? `ID ${c.AttorneyResponsibleID}` : null)],
+    ["Attorney (H)",     STAFF_MAP[c.AttorneyHandlingID]    || (c.AttorneyHandlingID    ? `ID ${c.AttorneyHandlingID}`    : null)],
+    ["Paralegal",        STAFF_MAP[c.ParalegalHandlingID]   || (c.ParalegalHandlingID   ? `ID ${c.ParalegalHandlingID}`   : null)],
+  ].filter(([,v]) => v);
+
+  const partiesHtml = parties.length ? `
+    <div class="card">
+      <div class="card-title">Parties</div>
+      <div class="card-body"><div class="party-cards">${parties.map(renderPartyCard).join("")}</div></div>
+    </div>` : "";
+
+  const injuriesHtml = injuries.length ? `
+    <div class="card">
+      <div class="card-title">Injuries</div>
+      <div class="card-body">${injuries.map(renderInjuryRow).join("")}</div>
+    </div>` : "";
+
+  const taskRowsHtml = caseTasks.length ? caseTasks
+    .sort((a,b) => (a.Complete?1:-1) - (b.Complete?1:-1) || (a.DueDate||"").localeCompare(b.DueDate||""))
+    .map(t => {
+      const done = t.Complete;
+      const due  = t.DueDate ? fmtDue(t.DueDate) : "—";
+      return `<tr class="${done?"task-done-row":""}">
+        <td>${done?"✅":"⬜"}</td>
+        <td class="task-desc${done?" done-text":""}">${esc(t.Description||t.Title||"")}</td>
+        <td>${due}</td>
+        <td>${esc(t.AssigneeName||"—")}</td>
+        <td></td></tr>`;
+    }).join("") : "";
+
+  const tasksHtml = caseTasks.length ? `
+    <div class="card">
+      <div class="card-title">Tasks (${caseTasks.length})</div>
+      <div class="card-body" style="padding:0">
+        <table class="tasks-table">
+          <thead><tr><th style="width:36px"></th><th>Description</th><th style="width:110px">Due</th><th style="width:140px">Assignee</th><th></th></tr></thead>
+          <tbody>${taskRowsHtml}</tbody>
+        </table>
+      </div>
+    </div>` : "";
+
+  panel.innerHTML = `
+    <div class="card">
+      <div class="case-header">
+        <div>
+          <div class="case-title">${fmtCaseName(c.Title||"")}</div>
+          <div class="case-side">${c.SideRepresented||""} ${statusBadge(c.CaseStatus)}</div>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="info-grid">
+          ${infoItems.map(([l,v])=>`<div class="info-item"><label>${l}</label><span>${esc(v)}</span></div>`).join("")}
+        </div>
+      </div>
+    </div>
+    ${partiesHtml}${injuriesHtml}${tasksHtml}`;
+}
+
+function renderPartyCard(p) {
+  const role      = ROLES[p.PeopleTypeID] || `Role ${p.PeopleTypeID}`;
+  const color     = ROLE_COLORS[p.PeopleTypeID] || "#374151";
+  const name      = [p.FirstName, p.MiddleName, p.LastName].filter(Boolean).join(" ") || p.CompanyName || "—";
+  const co        = p.ParentCompany || p.CompanyName || "";
+  const claim     = p.InsuranceClaimNumber || p.AlternateInsuranceClaimNumber || "";
+  return `<div class="party-card" onclick="gotoContact(${p.ContactID})">
+    <div class="party-role" style="color:${color}">${esc(role)}${p.PeopleTypeDetail?" — "+esc(p.PeopleTypeDetail):""}</div>
+    <div class="party-name">${esc(name)}</div>
+    ${co ? `<div class="party-co">${esc(co)}</div>` : ""}
+    ${p.Phone ? `<div class="party-phone">${esc(p.Phone)}</div>` : ""}
+    ${claim ? `<div class="party-claim">Claim: ${esc(claim)}</div>` : ""}
+  </div>`;
+}
+
+function renderInjuryRow(inj) {
+  const doi = inj.DateOfInjury ? fmtDate(inj.DateOfInjury) : "—";
+  const doiEnd = inj.DateOfInjuryEnd ? ` – ${fmtDate(inj.DateOfInjuryEnd)}` : "";
+  const metaFields = [
+    ["EAMS #",       inj.EAMSCaseNumber],
+    ["WCAB #",       inj.WCABCaseNumber],
+    ["Carrier Claim",inj.CarrierClaimNumber],
+    ["SW Due",       inj.SWDueDate ? fmtDate(inj.SWDueDate) : null],
+    ["ADJ Due",      inj.DateAdjDue ? fmtDate(inj.DateAdjDue) : null],
+    ["Other SOL",    inj.OtherSOLDate ? fmtDate(inj.OtherSOLDate) : null],
+    ["Follow-up",    inj.FollowUpDate ? fmtDate(inj.FollowUpDate) : null],
+    ["PD%",          inj.PermanentPercentage != null ? inj.PermanentPercentage + "%" : null],
+  ].filter(([,v]) => v);
+  return `<div class="injury-row">
+    <div class="injury-header">
+      <span class="injury-date">${doi}${doiEnd}</span>
+      ${inj.ApplicationStatus ? `<span class="injury-type-badge">${esc(inj.ApplicationStatus)}</span>` : ""}
+      ${inj.IsTemporary ? `<span class="badge" style="background:#fef3c7;color:#92400e">Temp</span>` : ""}
+      ${inj.IsPermanent ? `<span class="badge" style="background:#dbeafe;color:#1e40af">Perm</span>` : ""}
+    </div>
+    ${inj.InjuryDescription ? `<div style="font-size:13px;color:#374151;margin-bottom:8px">${esc(inj.InjuryDescription)}</div>` : ""}
+    ${metaFields.length ? `<div class="injury-meta">${metaFields.map(([l,v])=>`<div class="injury-meta-item"><label>${l}</label><span>${esc(v)}</span></div>`).join("")}</div>` : ""}
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════
+//  CONTACTS TAB
+// ═══════════════════════════════════════════════
+function populateRoleFilter() {
+  const sel = document.getElementById("role-filter");
+  const seen = new Set();
+  Object.values(contactMap).forEach(c => {
+    c.cases.forEach(r => seen.add(r.role));
+  });
+  const sorted = [...seen].map(id => [id, ROLES[id] || `Role ${id}`]).sort((a,b) => a[1].localeCompare(b[1]));
+  sorted.forEach(([id, name]) => {
+    const o = document.createElement("option");
+    o.value = id;
+    o.textContent = name;
+    sel.appendChild(o);
+  });
+}
+
+function filteredContacts() {
+  const q    = (document.getElementById("contact-search")?.value || "").toLowerCase();
+  const role = document.getElementById("role-filter")?.value || "";
+  return Object.values(contactMap).filter(c => {
+    if (role && !c.cases.some(r => String(r.role) === role)) return false;
+    const name    = ((c.FirstName||"")+" "+(c.LastName||"")).trim() || c.CompanyName || "";
+    const phone   = c.Phone || "";
+    const company = c.CompanyName || "";
+    return !q || name.toLowerCase().includes(q) || phone.includes(q) || company.toLowerCase().includes(q);
+  });
+}
+
+function filterContacts() { renderContactList(filteredContacts()); }
+
+let _selectedContactId = null;
+function renderContactList(arr) {
+  const el = document.getElementById("contact-list");
+  if (!arr.length) { el.innerHTML = `<div style="padding:16px;color:#9ca3af;font-size:13px">No contacts found</div>`; return; }
+  el.innerHTML = arr.map(c => {
+    const name = ((c.FirstName||"")+" "+(c.LastName||"")).trim() || c.CompanyName || "—";
+    return `<div class="list-item${_selectedContactId===c.ContactID?" selected":""}" onclick="selectContact(${c.ContactID})">
+      <div class="list-item-name">${esc(name)}</div>
+      <div class="list-item-sub">${c.Phone||""} · ${c.cases.length} case${c.cases.length!==1?"s":""}</div>
+    </div>`;
+  }).join("");
+}
+
+function selectContact(id) {
+  _selectedContactId = id;
+  document.querySelectorAll("#contact-list .list-item").forEach(el => {
+    el.classList.toggle("selected", el.getAttribute("onclick")||"" === `selectContact(${id})`);
+  });
+  const c = contactMap[id];
+  if (!c) return;
+  const name    = ((c.FirstName||"")+" "+(c.LastName||"")).trim() || c.CompanyName || "—";
+  const company = (!c.IsCompany && c.CompanyName) ? c.CompanyName : "";
+
+  // Related: carriers+TPAs if employer; TPAs if carrier
+  const isEmployer = c.cases.some(r => r.role === 771844);
+  const isCarrier  = c.cases.some(r => r.role === 771758 || r.role === 771778);
+  let relatedHtml  = "";
+  if (isEmployer || isCarrier) {
+    const targetRoles = isEmployer ? [771758, 771778, 771782] : [771782];
+    const related = {};
+    c.cases.forEach(r => {
+      const caseParties = partiesMap[r.cid] || [];
+      caseParties.filter(p => targetRoles.includes(p.PeopleTypeID)).forEach(p => {
+        if (!related[p.ContactID]) related[p.ContactID] = contactMap[p.ContactID];
+      });
+    });
+    const relArr = Object.values(related).filter(Boolean);
+    if (relArr.length) {
+      relatedHtml = `<div style="margin-top:12px"><div style="font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">${isEmployer?"Related Carriers / TPAs":"Related TPAs"}</div>
+        <div class="party-cards">${relArr.map(rc => {
+          const rname = ((rc.FirstName||"")+" "+(rc.LastName||"")).trim() || rc.CompanyName||"—";
+          return `<div class="party-card" onclick="selectContact(${rc.ContactID})"><div class="party-name">${esc(rname)}</div>${rc.Phone?`<div class="party-phone">${esc(rc.Phone)}</div>`:""}</div>`;
+        }).join("")}</div></div>`;
+    }
+  }
+
+  // Cases this contact appears in
+  const caseRowsHtml = c.cases.map(r => {
+    const cs = caseMap[r.cid];
+    const cname = cs ? fmtCaseName(cs.Title||"") : `Case ${r.cid}`;
+    const badge = cs ? statusBadge(cs.CaseStatus) : "";
+    const role  = ROLES[r.role] || `Role ${r.role}`;
+    return `<tr>
+      <td><a href="#" onclick="gotoCase(${r.cid});return false" style="color:#1a3a5c;font-weight:500">${esc(cname)}</a></td>
+      <td>${badge}</td>
+      <td>${esc(role)}</td>
+      <td>${esc(r.claim||"")}</td>
+    </tr>`;
+  }).join("");
+
+  document.getElementById("contact-detail").innerHTML = `
+    <div class="card">
+      <div class="card-body">
+        <div style="font-size:20px;font-weight:700;color:#1a3a5c;margin-bottom:${company?4:10}px">${esc(name)}</div>
+        ${company?`<div style="font-size:13px;color:#6b7280;margin-bottom:10px">${esc(company)}</div>`:""}
+        <div class="info-grid">
+          ${c.addr?`<div class="info-item"><label>Address</label><span>${esc(c.addr)}</span></div>`:""}
+          ${c.Phone?`<div class="info-item"><label>Phone</label><span>${esc(c.Phone)}</span></div>`:""}
+          ${c.Fax?`<div class="info-item"><label>Fax</label><span>${esc(c.Fax)}</span></div>`:""}
+          ${c.Email?`<div class="info-item"><label>Email</label><span><a href="mailto:${esc(c.Email)}">${esc(c.Email)}</a></span></div>`:""}
+        </div>
+        ${relatedHtml}
+      </div>
+      ${caseRowsHtml ? `
+        <div class="card-title" style="margin-top:0">Cases</div>
+        <div style="overflow:hidden">
+          <table><thead><tr><th>Case</th><th>Status</th><th>Role</th><th>Claim #</th></tr></thead>
+          <tbody>${caseRowsHtml}</tbody></table>
+        </div>` : ""}
+    </div>`;
+}
+
+// Cross-tab navigation
+function gotoContact(cid) { showTab("contacts"); _selectedContactId=null; filterContacts(); selectContact(cid); }
+function gotoCase(id)      { showTab("cases");    _selectedCaseId=null;   filterCases();    selectCase(id); }
+
+// ═══════════════════════════════════════════════
+//  TASKS TAB
+// ═══════════════════════════════════════════════
+function populateAssigneeFilter() {
+  const sel = document.getElementById("assignee-filter");
+  const names = [...new Set(TASKS_ARR.map(t => t.AssigneeName).filter(Boolean))].sort();
+  names.forEach(n => {
+    const o = document.createElement("option");
+    o.value = n;
+    o.textContent = n;
+    sel.appendChild(o);
+  });
+}
+
+function renderTasksTable() {
+  const status   = document.getElementById("status-filter")?.value   || "incomplete";
+  const assignee = document.getElementById("assignee-filter")?.value || "";
+
+  let filtered = TASKS_ARR.filter(t => {
+    if (status === "incomplete" && t.Complete) return false;
+    if (status === "done"       && !t.Complete) return false;
+    if (assignee && t.AssigneeName !== assignee) return false;
+    return true;
+  });
+
+  filtered.sort((a,b) => {
+    if (a.Complete !== b.Complete) return a.Complete ? 1 : -1;
+    return (a.DueDate||"").localeCompare(b.DueDate||"");
+  });
+
+  document.getElementById("tasks-count").textContent = `${filtered.length} task${filtered.length!==1?"s":""}`;
+
+  const cs = caseMap;
+  const tbody = document.getElementById("tasks-tbody");
+  tbody.innerHTML = filtered.map(t => {
+    const done  = t.Complete;
+    const desc  = esc(t.Description || t.Title || "");
+    const due   = t.DueDate ? fmtDue(t.DueDate) : `<span class="due-ok">—</span>`;
+    const cname = t.CaseFileID && caseMap[t.CaseFileID]
+      ? `<a href="#" onclick="gotoCase(${t.CaseFileID});return false" style="color:#1a3a5c">${esc(fmtCaseName(caseMap[t.CaseFileID].Title||""))}</a>`
+      : (t.CaseFileID ? `<span style="color:#9ca3af">Case ${t.CaseFileID}</span>` : `<span style="color:#9ca3af">—</span>`);
+    return `<tr class="${done?"task-done-row":""}">
+      <td><span class="task-check" title="${done?"Mark incomplete":"Mark complete"}" onclick="toggleTask('${t._spId}',${!done})">${done?"✅":"⬜"}</span></td>
+      <td><div class="task-desc${done?" done-text":""}">${desc}</div></td>
+      <td>${due}</td>
+      <td>${cname}</td>
+      <td>${esc(t.AssigneeName||"—")}</td>
+      <td style="white-space:nowrap">
+        <button class="task-action-btn" onclick="openTaskModal('${t._spId}')">Edit</button>
+      </td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="6" style="text-align:center;padding:24px;color:#9ca3af">No tasks</td></tr>`;
+
+  if (!TASKS_LIST_ID) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:#9ca3af">Tasks SP list not yet synced. Run CaseDB-to-SP-List.py with the Tasks table to populate.</td></tr>`;
+  }
+}
+
+function fmtDue(dateStr) {
+  if (!dateStr) return `<span class="due-ok">—</span>`;
+  const d = new Date(dateStr + (dateStr.includes("T") ? "" : "T00:00:00"));
+  const now = new Date(); now.setHours(0,0,0,0);
+  const diff = (d - now) / 86400000;
+  const label = d.toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});
+  if (diff < 0)  return `<span class="due-overdue">${label}</span>`;
+  if (diff <= 7) return `<span class="due-soon">${label}</span>`;
+  return `<span class="due-ok">${label}</span>`;
+}
+
+async function toggleTask(spId, newComplete) {
+  if (!TASKS_LIST_ID) return;
+  try {
+    const token = await getToken();
+    const url = `${GRAPH}/sites/${SITE_HOST}:${SITE_PATH}:/lists/${TASKS_LIST_ID}/items/${spId}/fields`;
+    const body = { Complete: newComplete };
+    if (newComplete) body.CompleteDate = new Date().toISOString().split("T")[0];
+    const res = await fetch(url, { method:"PATCH", headers:{"Authorization":`Bearer ${token}`,"Content-Type":"application/json"}, body:JSON.stringify(body) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    // update local state
+    const t = TASKS_ARR.find(t => t._spId === spId);
+    if (t) { t.Complete = newComplete; if (newComplete) t.CompleteDate = body.CompleteDate; }
+    renderTasksTable();
+  } catch(e) { alert("Failed to update task: " + e.message); }
+}
+
+// Task modal
+let _taskFormSpId = null;
+function openTaskModal(spId) {
+  _taskFormSpId = spId || null;
+  const form = document.getElementById("task-form");
+  form.reset();
+  setStatus("task-form-status", "");
+  document.getElementById("task-delete-btn").style.display = spId ? "block" : "none";
+  document.getElementById("task-form-title").textContent = spId ? "Edit Task" : "Add Task";
+  document.getElementById("task-submit-btn").disabled = false;
+
+  if (spId) {
+    const t = TASKS_ARR.find(t => t._spId === spId);
+    if (t) {
+      document.getElementById("tf-desc").value      = t.Description || t.Title || "";
+      document.getElementById("tf-due").value       = t.DueDate ? t.DueDate.split("T")[0] : "";
+      document.getElementById("tf-assignee").value  = t.AssigneeName || "";
+      document.getElementById("tf-caseid").value    = t.CaseFileID || "";
+      document.getElementById("tf-priority").value  = t.Priority || 3;
+    }
+  }
+  document.getElementById("overlay-task-form").classList.add("active");
+}
+
+function closeTaskModal(e) {
+  if (e && e.target !== document.getElementById("overlay-task-form")) return;
+  document.getElementById("overlay-task-form").classList.remove("active");
+}
+
+async function submitTask(e) {
+  e.preventDefault();
+  if (!TASKS_LIST_ID) { alert("Tasks SP list not yet available. Run the sync script first."); return; }
+  const desc     = document.getElementById("tf-desc").value.trim();
+  const due      = document.getElementById("tf-due").value;
+  const assignee = document.getElementById("tf-assignee").value.trim();
+  const caseId   = parseInt(document.getElementById("tf-caseid").value) || 0;
+  const priority = parseInt(document.getElementById("tf-priority").value) || 3;
+  if (!desc) return;
+
+  document.getElementById("task-submit-btn").disabled = true;
+  setStatus("task-form-status", "loading", "Saving…");
+
+  const fields = {
+    Title:        desc.slice(0, 255),
+    Description:  desc,
+    AssigneeName: assignee || "",
+    CaseFileID:   caseId,
+    Priority:     priority,
+  };
+  if (due) fields.DueDate = due;
+
+  try {
+    const token = await getToken();
+    let res, created;
+    if (_taskFormSpId) {
+      // update
+      const url = `${GRAPH}/sites/${SITE_HOST}:${SITE_PATH}:/lists/${TASKS_LIST_ID}/items/${_taskFormSpId}/fields`;
+      res = await fetch(url, { method:"PATCH", headers:{"Authorization":`Bearer ${token}`,"Content-Type":"application/json"}, body:JSON.stringify(fields) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+      // update local
+      const t = TASKS_ARR.find(t => t._spId === _taskFormSpId);
+      if (t) Object.assign(t, fields);
+    } else {
+      // insert
+      const url = `${GRAPH}/sites/${SITE_HOST}:${SITE_PATH}:/lists/${TASKS_LIST_ID}/items`;
+      res = await fetch(url, { method:"POST", headers:{"Authorization":`Bearer ${token}`,"Content-Type":"application/json"}, body:JSON.stringify({fields}) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+      created = await res.json();
+      const newTask = { _spId: created.id, ...fields, Complete: false };
+      TASKS_ARR.push(newTask);
+      if (caseId) { if (!tasksMap[caseId]) tasksMap[caseId]=[]; tasksMap[caseId].push(newTask); }
+    }
+    setStatus("task-form-status", "success", "Saved ✓");
+    setTimeout(() => {
+      document.getElementById("overlay-task-form").classList.remove("active");
+      renderTasksTable();
+    }, 900);
+  } catch(err) {
+    setStatus("task-form-status", "error", "Failed: " + err.message);
+    document.getElementById("task-submit-btn").disabled = false;
+  }
+}
+
+async function deleteTask() {
+  if (!_taskFormSpId || !TASKS_LIST_ID) return;
+  const t = TASKS_ARR.find(t => t._spId === _taskFormSpId);
+  const label = t ? (t.Description||t.Title||"this task").slice(0,60) : "this task";
+  if (!confirm(`Delete "${label}"? This cannot be undone.`)) return;
+  const btn = document.getElementById("task-delete-btn");
+  btn.disabled = true;
+  try {
+    const token = await getToken();
+    const url = `${GRAPH}/sites/${SITE_HOST}:${SITE_PATH}:/lists/${TASKS_LIST_ID}/items/${_taskFormSpId}`;
+    const res = await fetch(url, { method:"DELETE", headers:{ Authorization:`Bearer ${token}` } });
+    if (!res.ok && res.status !== 204) throw new Error(`HTTP ${res.status}`);
+    TASKS_ARR = TASKS_ARR.filter(t => t._spId !== _taskFormSpId);
+    document.getElementById("overlay-task-form").classList.remove("active");
+    renderTasksTable();
+  } catch(e) { btn.disabled=false; alert("Delete failed: " + e.message); }
+}
+
+// ═══════════════════════════════════════════════
+//  FIRM CALENDAR TAB
+// ═══════════════════════════════════════════════
+function initOrRefreshCalendar() {
+  if (!fcCalendar) {
+    fcCalendar = new FullCalendar.Calendar(document.getElementById("calendar"), {
+      initialView: "dayGridMonth",
+      headerToolbar: { left:"prev,next today", center:"title", right:"dayGridMonth,timeGridWeek,timeGridDay,listMonth" },
+      buttonText: { today:"Today", month:"Month", week:"Week", day:"Day", list:"Agenda" },
+      height: "100%",
+      eventClick: info => showCalDetail(info.event),
+      eventDidMount: info => {
+        info.el.title = [info.event.extendedProps.caseName, info.event.extendedProps.assignees].filter(Boolean).join(" · ");
+      }
+    });
+    fcCalendar.render();
+  }
+  // Load events from cached raw data
+  const fcEvents = (window._rawFirmEvents || [])
+    .filter(i => i.fields && i.fields.StartDate)
+    .map(i => {
+      const f = i.fields;
+      return {
+        id: i.id,
+        title: f.Title || "(No title)",
+        start: f.StartDate,
+        end:   f.EndDate || null,
+        backgroundColor: EVENT_COLORS[f.EventType] || defaultEventColor,
+        borderColor: "transparent",
+        extendedProps: { eventType:f.EventType||"", caseName:f.CaseName||"", caseFileId:f.CaseFileID||"", location:f.Location||"", assignees:f.Assignees||"", notes:f.Notes||"" }
+      };
+    });
+  fcCalendar.removeAllEvents();
+  fcCalendar.addEventSource(fcEvents);
+}
+
+// ── Calendar detail modal ──
+function showCalDetail(event) {
+  _calDetailEvent = event;
+  const p = event.extendedProps;
+  document.getElementById("cal-det-title").textContent = event.title;
+  const chip = document.getElementById("cal-det-chip");
+  chip.textContent = p.eventType || "Event";
+  chip.style.background = event.backgroundColor || defaultEventColor;
+  const fmt = d => d ? new Date(d).toLocaleString("en-US",{weekday:"short",month:"short",day:"numeric",year:"numeric",hour:"numeric",minute:"2-digit"}) : null;
+  const s = fmt(event.startStr), en = event.end ? fmt(event.endStr) : null;
+  document.getElementById("cal-det-datetime").textContent = en ? `${s} → ${en}` : s;
+  const v = (id, text) => { const el=document.getElementById(id); el.textContent=text||"—"; el.className=text?"val":"val muted"; };
+  v("cal-det-case",      p.caseName);
+  v("cal-det-fileid",    p.caseFileId);
+  v("cal-det-location",  p.location);
+  v("cal-det-assignees", p.assignees);
+  v("cal-det-notes",     p.notes);
+  document.getElementById("cal-det-delete-btn").disabled = false;
+  document.getElementById("cal-det-delete-btn").textContent = "Delete";
+  document.getElementById("overlay-cal-detail").classList.add("active");
+}
+
+function closeCalDetail(e) {
+  if (e && e.target !== document.getElementById("overlay-cal-detail")) return;
+  document.getElementById("overlay-cal-detail").classList.remove("active");
+  _calDetailEvent = null;
+}
+
+async function deleteCalEvent() {
+  if (!_calDetailEvent) return;
+  if (!confirm(`Delete "${_calDetailEvent.title}"? This cannot be undone.`)) return;
+  const btn = document.getElementById("cal-det-delete-btn");
+  btn.disabled = true; btn.textContent = "Deleting…";
+  try {
+    const token = await getToken();
+    const res = await fetch(`${GRAPH}/sites/${SITE_HOST}:${SITE_PATH}:/lists/${LIST_IDS.firmEvents}/items/${_calDetailEvent.id}`,
+      { method:"DELETE", headers:{ Authorization:`Bearer ${token}` } });
+    if (!res.ok && res.status !== 204) throw new Error(`HTTP ${res.status}`);
+    _calDetailEvent.remove();
+    // also remove from raw cache
+    window._rawFirmEvents = (window._rawFirmEvents||[]).filter(i => i.id !== _calDetailEvent.id);
+    document.getElementById("overlay-cal-detail").classList.remove("active");
+    _calDetailEvent = null;
+  } catch(e) { btn.disabled=false; btn.textContent="Delete"; alert("Delete failed: " + e.message); }
+}
+
+// ── Calendar add/edit modal ──
+let _calFormMode = "add"; // "add" or "edit"
+function buildCalTimeOptions(selectId, blankLabel) {
+  const sel = document.getElementById(selectId);
+  sel.innerHTML = `<option value="">${blankLabel}</option>`;
+  for (let h=6; h<=21; h++) for (let m=0; m<60; m+=30) {
+    if (h===21 && m>0) break;
+    const hh = h%12===0?12:h%12, mm=m===0?"00":"30", ampm=h<12?"AM":"PM";
+    const opt=document.createElement("option"); opt.value=`${String(h).padStart(2,"0")}:${mm}`;
+    opt.textContent=`${hh}:${mm} ${ampm}`; sel.appendChild(opt);
+  }
+}
+
+function openCalAddModal() {
+  _calFormMode = "add";
+  document.getElementById("cal-form").reset();
+  buildCalTimeOptions("cf-start-time","All Day"); buildCalTimeOptions("cf-end-time","— None —");
+  document.getElementById("cf-start-date").value = new Date().toLocaleDateString("en-CA");
+  document.getElementById("cal-form-title").textContent = "Add Event";
+  document.getElementById("cal-form-submit-btn").textContent = "Add to Calendar";
+  document.getElementById("cal-form-submit-btn").disabled = false;
+  setStatus("cal-form-status","");
+  document.getElementById("overlay-cal-form").classList.add("active");
+}
+
+function openCalEditModal() {
+  if (!_calDetailEvent) return;
+  _calFormMode = "edit";
+  const e = _calDetailEvent, p = e.extendedProps;
+  document.getElementById("cal-form").reset();
+  buildCalTimeOptions("cf-start-time","All Day"); buildCalTimeOptions("cf-end-time","— None —");
+  document.getElementById("cal-form-title").textContent = "Edit Event";
+  document.getElementById("cal-form-submit-btn").textContent = "Save Changes";
+  document.getElementById("cal-form-submit-btn").disabled = false;
+  setStatus("cal-form-status","");
+  document.getElementById("cf-title").value     = e.title;
+  document.getElementById("cf-type").value      = p.eventType;
+  document.getElementById("cf-assignees").value = p.assignees;
+  document.getElementById("cf-casename").value  = p.caseName;
+  document.getElementById("cf-casefileid").value= p.caseFileId;
+  document.getElementById("cf-location").value  = p.location;
+  document.getElementById("cf-notes").value     = p.notes;
+  // dates/times
+  if (e.startStr) {
+    const [d,t] = e.startStr.split("T");
+    document.getElementById("cf-start-date").value = d;
+    if (t) { const hhmm = t.slice(0,5); document.getElementById("cf-start-time").value = hhmm; }
+  }
+  if (e.endStr) {
+    const [d,t] = e.endStr.split("T");
+    document.getElementById("cf-end-date").value = d;
+    if (t) { const hhmm = t.slice(0,5); document.getElementById("cf-end-time").value = hhmm; }
+  }
+  document.getElementById("overlay-cal-detail").classList.remove("active");
+  document.getElementById("overlay-cal-form").classList.add("active");
+}
+
+function closeCalFormModal(e) {
+  if (e && e.target !== document.getElementById("overlay-cal-form")) return;
+  document.getElementById("overlay-cal-form").classList.remove("active");
+}
+
+async function submitCalEvent(e) {
+  e.preventDefault();
+  const title     = document.getElementById("cf-title").value.trim();
+  const type      = document.getElementById("cf-type").value;
+  const startDate = document.getElementById("cf-start-date").value;
+  const startTime = document.getElementById("cf-start-time").value;
+  const endDate   = document.getElementById("cf-end-date").value;
+  const endTime   = document.getElementById("cf-end-time").value;
+  if (!title || !type || !startDate) return;
+
+  const toISO = (date, time) => {
+    if (!date) return null;
+    return new Date(time ? `${date}T${time}:00` : `${date}T00:00:00`).toISOString();
+  };
+  const btn = document.getElementById("cal-form-submit-btn");
+  btn.disabled = true;
+  setStatus("cal-form-status","loading","Saving…");
+
+  const fields = {
+    Title:      title,
+    EventType:  type,
+    StartDate:  toISO(startDate, startTime),
+    CaseName:   document.getElementById("cf-casename").value.trim()  || undefined,
+    CaseFileID: document.getElementById("cf-casefileid").value.trim()|| undefined,
+    Assignees:  document.getElementById("cf-assignees").value.trim() || undefined,
+    Location:   document.getElementById("cf-location").value.trim()  || undefined,
+    Notes:      document.getElementById("cf-notes").value.trim()     || undefined,
+  };
+  const endISO = toISO(endDate, endTime);
+  if (endISO) fields.EndDate = endISO;
+  Object.keys(fields).forEach(k => fields[k]===undefined && delete fields[k]);
+
+  try {
+    const token = await getToken();
+    const baseUrl = `${GRAPH}/sites/${SITE_HOST}:${SITE_PATH}:/lists/${LIST_IDS.firmEvents}/items`;
+
+    if (_calFormMode === "edit" && _calDetailEvent) {
+      const res = await fetch(`${baseUrl}/${_calDetailEvent.id}/fields`, {
+        method:"PATCH", headers:{"Authorization":`Bearer ${token}`,"Content-Type":"application/json"},
+        body: JSON.stringify(fields)
+      });
+      if (!res.ok) { const err=await res.json().catch(()=>({})); throw new Error(err?.error?.message||`HTTP ${res.status}`); }
+      // update calendar event
+      _calDetailEvent.setProp("title", fields.Title);
+      _calDetailEvent.setStart(fields.StartDate);
+      if (fields.EndDate) _calDetailEvent.setEnd(fields.EndDate);
+      _calDetailEvent.setProp("backgroundColor", EVENT_COLORS[fields.EventType]||defaultEventColor);
+      _calDetailEvent.setExtendedProp("eventType",  fields.EventType||"");
+      _calDetailEvent.setExtendedProp("caseName",   fields.CaseName||"");
+      _calDetailEvent.setExtendedProp("caseFileId", fields.CaseFileID||"");
+      _calDetailEvent.setExtendedProp("location",   fields.Location||"");
+      _calDetailEvent.setExtendedProp("assignees",  fields.Assignees||"");
+      _calDetailEvent.setExtendedProp("notes",      fields.Notes||"");
+      setStatus("cal-form-status","success","Saved ✓");
+    } else {
+      const res = await fetch(baseUrl, {
+        method:"POST", headers:{"Authorization":`Bearer ${token}`,"Content-Type":"application/json"},
+        body: JSON.stringify({fields})
+      });
+      if (!res.ok) { const err=await res.json().catch(()=>({})); throw new Error(err?.error?.message||`HTTP ${res.status}`); }
+      const created = await res.json();
+      fcCalendar.addEvent({
+        id: created.id, title: fields.Title,
+        start: fields.StartDate, end: fields.EndDate||null,
+        backgroundColor: EVENT_COLORS[fields.EventType]||defaultEventColor,
+        borderColor: "transparent",
+        extendedProps: { eventType:fields.EventType||"", caseName:fields.CaseName||"", caseFileId:fields.CaseFileID||"", location:fields.Location||"", assignees:fields.Assignees||"", notes:fields.Notes||"" }
+      });
+      setStatus("cal-form-status","success","Event added ✓");
+    }
+    setTimeout(() => { closeCalFormModal(); }, 1200);
+  } catch(err) {
+    setStatus("cal-form-status","error","Failed: " + err.message);
+    btn.disabled = false;
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  UTILITIES
+// ═══════════════════════════════════════════════
+function esc(s) {
+  return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+function fmtDate(s) {
+  if (!s) return "";
+  const d = new Date(s + (s.includes("T") ? "" : "T00:00:00"));
+  return isNaN(d) ? s : d.toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});
+}
+function setStatus(id, type, msg) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (!type) { el.className="status-msg"; el.textContent=""; return; }
+  el.className = "status-msg " + type;
+  el.textContent = msg || "";
+}
+</script>
+</body>
+</html>
