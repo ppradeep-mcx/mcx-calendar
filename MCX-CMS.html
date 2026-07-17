@@ -1509,45 +1509,50 @@ async function submitEmailTask(e) {
 //  FIRM CALENDAR TAB
 // ═══════════════════════════════════════════════
 // ── Timezone helpers ──────────────────────────────────────────────────────────
-// SP stores event times as UTC ISO strings without "Z" (unix_to_iso_dt omits it).
-// Strategy: pre-convert every UTC string → naive Pacific string, then run
-// FullCalendar in timeZone:'UTC' so it treats the Pacific strings as literal
-// wall-clock times with no further offset. Avoids needing the Luxon adapter.
+// MerusCase stores event times as UTC ISO strings without "Z" (unix_to_iso_dt).
+// FullCalendar needs wall-clock Pacific time. Strategy:
+//   1. utcToPacificNaive  — pure arithmetic UTC→Pacific for calendar grid positioning
+//   2. fmtPacific         — toLocaleString with timeZone:'America/Los_Angeles' for text display
+//   3. pacificToUTC       — pure arithmetic Pacific→UTC for saving to SP
+// No Intl formatToParts, no FC timezone plugins required.
 
-const _pacFmt = new Intl.DateTimeFormat('en-US', {
-  timeZone:'America/Los_Angeles',
-  year:'numeric',month:'2-digit',day:'2-digit',
-  hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false
-});
-function _fmtParts(d) {
-  const p = {};
-  _pacFmt.formatToParts(d).forEach(x => { if (x.type !== 'literal') p[x.type] = x.value; });
-  p.hour = p.hour === '24' ? '00' : p.hour;
-  return p;
+function _pacificOffsetHours(d) {
+  // US Pacific: spring forward 2nd Sunday March 10:00 UTC, fall back 1st Sunday Nov 9:00 UTC
+  const y = d.getUTCFullYear();
+  const d0Mar = new Date(Date.UTC(y, 2, 1)).getUTCDay();
+  const d0Nov = new Date(Date.UTC(y, 10, 1)).getUTCDay();
+  const springFwd = new Date(Date.UTC(y, 2,  8 + (7 - d0Mar) % 7, 10)); // 2nd Sun Mar 2AM PST
+  const fallBack  = new Date(Date.UTC(y, 10, 1 + (7 - d0Nov) % 7,  9)); // 1st Sun Nov 2AM PDT
+  return (d >= springFwd && d < fallBack) ? 7 : 8; // PDT = UTC-7, PST = UTC-8
 }
 
-// UTC string (with or without Z) → naive Pacific ISO string ("YYYY-MM-DDTHH:MM:SS")
+// UTC string (with or without "Z") → naive Pacific ISO "YYYY-MM-DDTHH:MM:SS"
 function utcToPacificNaive(s) {
   if (!s) return null;
   const utc = (s.endsWith('Z') || /[+\-]\d{2}:\d{2}$/.test(s)) ? s : s + 'Z';
   const d = new Date(utc);
   if (isNaN(d)) return null;
-  const p = _fmtParts(d);
-  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:${p.second}`;
+  const adj = new Date(d.getTime() - _pacificOffsetHours(d) * 3600000);
+  const z = n => String(n).padStart(2, '0');
+  return `${adj.getUTCFullYear()}-${z(adj.getUTCMonth()+1)}-${z(adj.getUTCDate())}T${z(adj.getUTCHours())}:${z(adj.getUTCMinutes())}:${z(adj.getUTCSeconds())}`;
 }
 
-// Pacific date+time strings from a form → UTC ISO string for storage in SP
+// Pacific date+time form values → UTC ISO string for SP storage
 function pacificToUTC(date, time) {
   if (!date) return null;
-  const naive = (time ? `${date}T${time}:00` : `${date}T00:00:00`);
-  // Treat the Pacific naive string as UTC temporarily to get a Date
-  const fakeUTC = new Date(naive + 'Z');
+  const fakeUTC = new Date((time ? `${date}T${time}:00` : `${date}T00:00:00`) + 'Z');
   if (isNaN(fakeUTC)) return null;
-  // Get Pacific display of that UTC moment
-  const p = _fmtParts(fakeUTC);
-  const pAsUTC = new Date(`${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:${p.second}Z`);
-  // Shift: real UTC = fakeUTC + (fakeUTC − pAsUTC)  [adds the Pacific→UTC offset]
-  return new Date(fakeUTC.getTime() + (fakeUTC - pAsUTC)).toISOString();
+  return new Date(fakeUTC.getTime() + _pacificOffsetHours(fakeUTC) * 3600000).toISOString();
+}
+
+// Format a raw UTC string from SP as Pacific time — for detail modal text only
+function fmtPacific(s) {
+  if (!s) return null;
+  const utc = (s.endsWith('Z') || /[+\-]\d{2}:\d{2}$/.test(s)) ? s : s + 'Z';
+  return new Date(utc).toLocaleString('en-US', {
+    weekday:'short', month:'short', day:'numeric', year:'numeric',
+    hour:'numeric', minute:'2-digit', timeZone:'America/Los_Angeles'
+  });
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1564,7 +1569,7 @@ function buildFcEvents() {
         end:   utcToPacificNaive(f.EndDate),
         backgroundColor: EVENT_COLORS[f.EventType] || defaultEventColor,
         borderColor: "transparent",
-        extendedProps: { eventType:f.EventType||"", caseName:f.CaseName||"", caseFileId:f.CaseFileID||"", location:f.Location||"", assignees:f.Assignees||"", notes:f.Notes||"" }
+        extendedProps: { eventType:f.EventType||"", caseName:f.CaseName||"", caseFileId:f.CaseFileID||"", location:f.Location||"", assignees:f.Assignees||"", notes:f.Notes||"", startRaw:f.StartDate||null, endRaw:f.EndDate||null }
       };
     });
   if (activeEventTypeFilters.size === 0) return all;
@@ -1638,7 +1643,6 @@ function applyCalendarFilter() {
 function initOrRefreshCalendar() {
   if (!fcCalendar) {
     fcCalendar = new FullCalendar.Calendar(document.getElementById("calendar"), {
-      timeZone: "UTC",
       initialView: "timeGridWeek",
       headerToolbar: { left:"prev,next today", center:"title", right:"dayGridMonth,timeGridWeek,timeGridDay,listMonth" },
       buttonText: { today:"Today", month:"Month", week:"Week", day:"Day", list:"Agenda" },
@@ -1662,9 +1666,8 @@ function showCalDetail(event) {
   const chip = document.getElementById("cal-det-chip");
   chip.textContent = p.eventType || "Event";
   chip.style.background = event.backgroundColor || defaultEventColor;
-  // startStr from FC (timeZone:'UTC') is already a naive Pacific string — display as UTC
-  const fmt = d => d ? new Date(d).toLocaleString("en-US",{weekday:"short",month:"short",day:"numeric",year:"numeric",hour:"numeric",minute:"2-digit",timeZone:"UTC"}) : null;
-  const s = fmt(event.startStr), en = event.end ? fmt(event.endStr) : null;
+  // Use the raw UTC string stored in extendedProps for display — fmtPacific converts it reliably
+  const s = fmtPacific(event.extendedProps.startRaw), en = fmtPacific(event.extendedProps.endRaw);
   document.getElementById("cal-det-datetime").textContent = en ? `${s} → ${en}` : s;
   const v = (id, text) => { const el=document.getElementById(id); el.textContent=text||"—"; el.className=text?"val":"val muted"; };
   v("cal-det-case",      p.caseName);
@@ -1813,6 +1816,8 @@ async function submitCalEvent(e) {
       _calDetailEvent.setExtendedProp("location",   fields.Location||"");
       _calDetailEvent.setExtendedProp("assignees",  fields.Assignees||"");
       _calDetailEvent.setExtendedProp("notes",      fields.Notes||"");
+      _calDetailEvent.setExtendedProp("startRaw",   fields.StartDate||null);
+      _calDetailEvent.setExtendedProp("endRaw",     fields.EndDate||null);
       setStatus("cal-form-status","success","Saved ✓");
     } else {
       const res = await fetch(baseUrl, {
@@ -1826,7 +1831,7 @@ async function submitCalEvent(e) {
         start: utcToPacificNaive(fields.StartDate), end: utcToPacificNaive(fields.EndDate)||null,
         backgroundColor: EVENT_COLORS[fields.EventType]||defaultEventColor,
         borderColor: "transparent",
-        extendedProps: { eventType:fields.EventType||"", caseName:fields.CaseName||"", caseFileId:fields.CaseFileID||"", location:fields.Location||"", assignees:fields.Assignees||"", notes:fields.Notes||"" }
+        extendedProps: { eventType:fields.EventType||"", caseName:fields.CaseName||"", caseFileId:fields.CaseFileID||"", location:fields.Location||"", assignees:fields.Assignees||"", notes:fields.Notes||"", startRaw:fields.StartDate||null, endRaw:fields.EndDate||null }
       });
       setStatus("cal-form-status","success","Event added ✓");
     }
