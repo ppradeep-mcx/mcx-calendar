@@ -187,6 +187,13 @@ tr:hover td{background:#f8fafc}
 .detail-row .val{color:#111;line-height:1.5}
 .detail-row .val.muted{color:#9ca3af;font-style:italic}
 .event-type-chip{font-size:11px;font-weight:600;padding:2px 8px;border-radius:12px;color:#fff}
+/* ── CALENDAR FILTER CHIPS ── */
+.cal-filter-chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;border:1.5px solid #d1d5db;font-size:12px;font-weight:500;cursor:pointer;transition:all .15s;background:#f9fafb;color:#4b5563;user-select:none;white-space:nowrap}
+.cal-filter-chip .chip-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.cal-filter-chip:hover:not(.active){background:#e5e7eb;border-color:#9ca3af}
+.cal-filter-chip.active{color:#fff!important;border-color:transparent!important}
+#cal-filter-clear{font-size:11px;color:#6b7280;cursor:pointer;padding:4px 8px;border-radius:4px;border:1px solid #d1d5db;background:#fff;visibility:hidden;white-space:nowrap}
+#cal-filter-clear:hover{background:#f3f4f6;color:#374151}
 </style>
 </head>
 <body>
@@ -302,19 +309,10 @@ tr:hover td{background:#f8fafc}
     <!-- ── CALENDAR TAB ── -->
     <div id="tab-calendar">
       <div class="cal-toolbar">
-        <div class="cal-legend">
-          <span style="font-weight:600;color:#4b5563;font-size:11px;text-transform:uppercase;letter-spacing:.5px;margin-right:2px">EVENT TYPE:</span>
-          <span><span class="legend-dot" style="background:#dc2626"></span>Deposition</span>
-          <span><span class="legend-dot" style="background:#2563eb"></span>MSC</span>
-          <span><span class="legend-dot" style="background:#7c3aed"></span>Trial</span>
-          <span><span class="legend-dot" style="background:#059669"></span>QME</span>
-          <span><span class="legend-dot" style="background:#0d9488"></span>IME</span>
-          <span><span class="legend-dot" style="background:#d97706"></span>Hearing</span>
-          <span><span class="legend-dot" style="background:#9333ea"></span>Arbitration</span>
-          <span><span class="legend-dot" style="background:#0891b2"></span>Mediation</span>
-          <span><span class="legend-dot" style="background:#6b7280"></span>Other</span>
+        <div class="cal-legend" id="cal-filter-bar" style="gap:6px">
+          <!-- chips built by buildCalFilterChips() -->
         </div>
-        <div style="margin-left:auto">
+        <div style="margin-left:auto;flex-shrink:0">
           <button class="btn-orange" onclick="openCalAddModal()">+ Add Event</button>
         </div>
       </div>
@@ -545,6 +543,7 @@ let TASKS_LIST_ID = null;  // discovered at runtime
 
 let fcCalendar = null;
 let _calDetailEvent = null;  // FullCalendar event object currently shown in detail modal
+let activeEventTypeFilters = new Set(); // empty = show all; non-empty = show only matching types
 let _editingTaskId  = null;  // SP item id of task being edited (null = new task)
 
 // ═══════════════════════════════════════════════
@@ -1258,22 +1257,9 @@ async function deleteTask() {
 // ═══════════════════════════════════════════════
 //  FIRM CALENDAR TAB
 // ═══════════════════════════════════════════════
-function initOrRefreshCalendar() {
-  if (!fcCalendar) {
-    fcCalendar = new FullCalendar.Calendar(document.getElementById("calendar"), {
-      initialView: "dayGridMonth",
-      headerToolbar: { left:"prev,next today", center:"title", right:"dayGridMonth,timeGridWeek,timeGridDay,listMonth" },
-      buttonText: { today:"Today", month:"Month", week:"Week", day:"Day", list:"Agenda" },
-      height: "100%",
-      eventClick: info => showCalDetail(info.event),
-      eventDidMount: info => {
-        info.el.title = [info.event.extendedProps.caseName, info.event.extendedProps.assignees].filter(Boolean).join(" · ");
-      }
-    });
-    fcCalendar.render();
-  }
-  // Load events from cached raw data
-  const fcEvents = (window._rawFirmEvents || [])
+// ── Build FullCalendar event objects from raw SP data, applying active filters ──
+function buildFcEvents() {
+  const all = (window._rawFirmEvents || [])
     .filter(i => i.fields && i.fields.StartDate)
     .map(i => {
       const f = i.fields;
@@ -1287,8 +1273,90 @@ function initOrRefreshCalendar() {
         extendedProps: { eventType:f.EventType||"", caseName:f.CaseName||"", caseFileId:f.CaseFileID||"", location:f.Location||"", assignees:f.Assignees||"", notes:f.Notes||"" }
       };
     });
+  if (activeEventTypeFilters.size === 0) return all;
+  return all.filter(e => {
+    const t = e.extendedProps.eventType;
+    if (activeEventTypeFilters.has("__other__") && (!t || !EVENT_COLORS[t])) return true;
+    return activeEventTypeFilters.has(t);
+  });
+}
+
+// ── Rebuild filter chips from EVENT_COLORS ──
+function buildCalFilterChips() {
+  const bar = document.getElementById("cal-filter-bar");
+  bar.innerHTML = '<span style="font-weight:600;color:#4b5563;font-size:11px;text-transform:uppercase;letter-spacing:.5px;flex-shrink:0">FILTER:</span>';
+  Object.entries(EVENT_COLORS).forEach(([type, color]) => {
+    const chip = document.createElement("span");
+    chip.className = "cal-filter-chip";
+    chip.dataset.type = type;
+    chip.dataset.color = color;
+    chip.innerHTML = `<span class="chip-dot" style="background:${color}"></span>${type}`;
+    chip.addEventListener("click", () => toggleEventTypeFilter(type));
+    bar.appendChild(chip);
+  });
+  const otherChip = document.createElement("span");
+  otherChip.className = "cal-filter-chip";
+  otherChip.dataset.type = "__other__";
+  otherChip.dataset.color = defaultEventColor;
+  otherChip.innerHTML = `<span class="chip-dot" style="background:${defaultEventColor}"></span>Other`;
+  otherChip.addEventListener("click", () => toggleEventTypeFilter("__other__"));
+  bar.appendChild(otherChip);
+  const clr = document.createElement("button");
+  clr.id = "cal-filter-clear";
+  clr.textContent = "Clear filters";
+  clr.addEventListener("click", () => { activeEventTypeFilters.clear(); syncFilterChipUI(); applyCalendarFilter(); });
+  bar.appendChild(clr);
+  syncFilterChipUI();
+}
+
+function toggleEventTypeFilter(type) {
+  if (activeEventTypeFilters.has(type)) activeEventTypeFilters.delete(type);
+  else activeEventTypeFilters.add(type);
+  syncFilterChipUI();
+  applyCalendarFilter();
+}
+
+function syncFilterChipUI() {
+  document.querySelectorAll(".cal-filter-chip").forEach(chip => {
+    const color = chip.dataset.color || defaultEventColor;
+    if (activeEventTypeFilters.has(chip.dataset.type)) {
+      chip.classList.add("active");
+      chip.style.background = color;
+      chip.style.borderColor = color;
+      chip.style.color = "#fff";
+    } else {
+      chip.classList.remove("active");
+      chip.style.background = "";
+      chip.style.borderColor = "";
+      chip.style.color = "";
+    }
+  });
+  const clr = document.getElementById("cal-filter-clear");
+  if (clr) clr.style.visibility = activeEventTypeFilters.size ? "visible" : "hidden";
+}
+
+function applyCalendarFilter() {
+  if (!fcCalendar) return;
   fcCalendar.removeAllEvents();
-  fcCalendar.addEventSource(fcEvents);
+  fcCalendar.addEventSource(buildFcEvents());
+}
+
+function initOrRefreshCalendar() {
+  if (!fcCalendar) {
+    fcCalendar = new FullCalendar.Calendar(document.getElementById("calendar"), {
+      initialView: "timeGridWeek",
+      headerToolbar: { left:"prev,next today", center:"title", right:"dayGridMonth,timeGridWeek,timeGridDay,listMonth" },
+      buttonText: { today:"Today", month:"Month", week:"Week", day:"Day", list:"Agenda" },
+      height: "100%",
+      eventClick: info => showCalDetail(info.event),
+      eventDidMount: info => {
+        info.el.title = [info.event.extendedProps.caseName, info.event.extendedProps.assignees].filter(Boolean).join(" · ");
+      }
+    });
+    fcCalendar.render();
+    buildCalFilterChips();
+  }
+  applyCalendarFilter();
 }
 
 // ── Calendar detail modal ──
