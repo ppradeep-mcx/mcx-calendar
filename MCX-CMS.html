@@ -506,16 +506,16 @@ const LIST_IDS = {
   tasks:      null,  // populated after first list-names lookup
 };
 
-// Role IDs → names (MerusCase people_type_id)
-const ROLES = {
-  771755:"Applicant",771757:"Defense Attorney",771758:"Carrier",771760:"Doctor",
-  771761:"QME",771762:"Panel QME",771763:"AME",771764:"Claims Adjuster",
-  771765:"Defendant",771766:"Plaintiff",771767:"PTP",771768:"QME (Defense)",
-  771769:"Nurse Case Manager",771778:"Carrier (Defendant)",771782:"TPA",
-  771783:"Dentist",771784:"Beneficiary",771844:"Employer",771846:"Hearing Judge",
-  771850:"Lien Claimant",771851:"Other",771853:"Referral Source (Inbound)",
-  771854:"Referral (Outbound)",771855:"Attorney"
-};
+// Lookup maps — populated at runtime from SharePoint constant lists.
+// Keys are numeric MerusCase IDs (ConstantID field).
+// CaseStatuses / InjuryStatuses → {label, slug};  all others → label string.
+let CASE_STATUS_MAP   = {};
+let INJURY_TYPE_MAP   = {};
+let INJURY_STATUS_MAP = {};
+let VENUE_MAP         = {};
+let FIRM_OFFICE_MAP   = {};
+let CASE_TYPE_MAP     = {};
+let ROLES             = {};
 const ROLE_COLORS = {
   771755:"#1e40af",771757:"#7c3aed",771758:"#059669",771778:"#059669",
   771844:"#d97706",771782:"#0891b2",771760:"#dc2626",771767:"#dc2626",
@@ -642,17 +642,51 @@ async function loadList(listId, fields, token) {
   return items;
 }
 
-async function findTasksListId(token) {
+// Returns { listName → listId } for every list in the site.
+// Used once per loadAllData() to resolve both the Tasks list and all constant lists.
+async function fetchListIndex(token) {
   const url = `${GRAPH}/sites/${SITE_HOST}:${SITE_PATH}:/lists?$select=id,name`;
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-  if (!res.ok) return null;
+  if (!res.ok) return {};
   const d = await res.json();
-  const found = (d.value || []).find(l => l.name === "Tasks");
-  return found ? found.id : null;
+  const idx = {};
+  (d.value || []).forEach(l => idx[l.name] = l.id);
+  return idx;
+}
+
+// Loads all 7 constant SP lists in parallel and populates the lookup maps.
+async function loadConstants(token, listIndex) {
+  const DEFS = [
+    { name:"CaseStatuses",   map:CASE_STATUS_MAP,   build: f => ({ label:f.Label, slug:f.Slug }) },
+    { name:"CaseTypes",      map:CASE_TYPE_MAP,     build: f => f.Label },
+    { name:"InjuryTypes",    map:INJURY_TYPE_MAP,   build: f => f.Label },
+    { name:"InjuryStatuses", map:INJURY_STATUS_MAP, build: f => ({ label:f.Label, slug:f.Slug }) },
+    { name:"Venues",         map:VENUE_MAP,         build: f => f.Label },
+    { name:"FirmOffices",    map:FIRM_OFFICE_MAP,   build: f => f.Label },
+    { name:"Roles",          map:ROLES,             build: f => f.Label },
+  ];
+  await Promise.all(DEFS.map(async ({ name, map, build }) => {
+    const listId = listIndex[name];
+    if (!listId) { console.warn(`[constants] SP list not found: ${name}`); return; }
+    const items = await loadList(listId, null, token);
+    items.forEach(i => {
+      const id = parseInt(i.fields?.ConstantID);
+      if (!isNaN(id)) map[id] = build(i.fields);
+    });
+  }));
 }
 
 async function loadAllData() {
   const token = await getToken();
+
+  // Discover all SP list IDs in one call — used for constants + Tasks list
+  showLoading("Discovering lists…");
+  const listIndex = await fetchListIndex(token);
+  TASKS_LIST_ID = listIndex["Tasks"] || null;
+
+  // Load all constant lists in parallel before rendering anything
+  showLoading("Loading constants…");
+  await loadConstants(token, listIndex);
 
   showLoading("Loading staff…");
   const staffItems = await loadList(LIST_IDS.staff, null, token);
@@ -680,7 +714,6 @@ async function loadAllData() {
   const PARTIES_ARR = partyItems.map(i => ({ _spId: i.id, ...i.fields }));
 
   showLoading("Loading tasks…");
-  TASKS_LIST_ID = await findTasksListId(token);
   if (TASKS_LIST_ID) {
     const taskItems = await loadList(TASKS_LIST_ID, null, token);
     TASKS_ARR = taskItems.map(i => ({ _spId: i.id, ...i.fields }));
@@ -756,13 +789,17 @@ function fmtCaseName(name) {
 }
 
 function statusBadge(s) {
-  const sl = (s || "").toLowerCase();
+  // Resolve numeric ID (e.g. "93857") → text label via CASE_STATUS_MAP
+  const num = parseInt(s);
+  const entry = (!isNaN(num) && CASE_STATUS_MAP[num]) ? CASE_STATUS_MAP[num] : null;
+  const label = entry ? entry.label : (s || "—");
+  const ll = label.toLowerCase();
   let cls = "badge-other";
-  if (sl === "open")   cls = "badge-open";
-  else if (sl === "closed" || sl === "destroyed" || sl === "archived" || sl === "dismissed") cls = "badge-closed";
-  else if (sl === "pending" || sl === "hold") cls = "badge-pending";
-  else if (sl === "intake") cls = "badge-intake";
-  return `<span class="badge ${cls}">${s || "—"}</span>`;
+  if (ll === "open")   cls = "badge-open";
+  else if (["closed","destroyed","archived","dismissed","declined","deceased","stipulation"].includes(ll)) cls = "badge-closed";
+  else if (ll === "pending" || ll === "hold") cls = "badge-pending";
+  else if (ll === "intake") cls = "badge-intake";
+  return `<span class="badge ${cls}">${esc(label)}</span>`;
 }
 
 function filterCases() {
@@ -798,10 +835,15 @@ function selectCase(id) {
   const injuries  = injuriesMap[id] || [];
   const caseTasks = tasksMap[id] || [];
 
+  const caseStatusLabel = CASE_STATUS_MAP[parseInt(c.CaseStatus)]?.label || c.CaseStatus;
+  const caseTypeLabel   = CASE_TYPE_MAP[parseInt(c.CaseType)]             || (c.CaseType ? `Type ${c.CaseType}` : null);
+  const venueLabel      = VENUE_MAP[parseInt(c.VenueID)]                  || null;
   const infoItems = [
     ["Claim #",          c.PrincipalClaimNumber],
     ["File #",           c.FileNumber],
-    ["Case Status",      c.CaseStatus],
+    ["Case Status",      caseStatusLabel],
+    ["Case Type",        caseTypeLabel],
+    ["Venue",            venueLabel],
     ["Side",             c.SideRepresented],
     ["Attorney (R)",     STAFF_MAP[c.AttorneyResponsibleID] || (c.AttorneyResponsibleID ? `ID ${c.AttorneyResponsibleID}` : null)],
     ["Attorney (H)",     STAFF_MAP[c.AttorneyHandlingID]    || (c.AttorneyHandlingID    ? `ID ${c.AttorneyHandlingID}`    : null)],
@@ -877,22 +919,30 @@ function renderPartyCard(p) {
 }
 
 function renderInjuryRow(inj) {
-  const doi = inj.DateOfInjury ? fmtDate(inj.DateOfInjury) : "—";
+  const doi    = inj.DateOfInjury    ? fmtDate(inj.DateOfInjury)    : "—";
   const doiEnd = inj.DateOfInjuryEnd ? ` – ${fmtDate(inj.DateOfInjuryEnd)}` : "";
+  // Resolve injury type
+  const injTypeLabel = INJURY_TYPE_MAP[inj.InjuryTypeID] || null;
+  // Resolve injury/application status via INJURY_STATUS_MAP
+  const appStatusNum = parseInt(inj.ApplicationStatus);
+  const appStatusEntry = !isNaN(appStatusNum) ? INJURY_STATUS_MAP[appStatusNum] : null;
+  const appStatusLabel = appStatusEntry ? appStatusEntry.label
+    : (inj.ApplicationStatus && inj.ApplicationStatus !== "0" ? inj.ApplicationStatus : null);
   const metaFields = [
     ["EAMS #",       inj.EAMSCaseNumber],
     ["WCAB #",       inj.WCABCaseNumber],
     ["Carrier Claim",inj.CarrierClaimNumber],
-    ["SW Due",       inj.SWDueDate ? fmtDate(inj.SWDueDate) : null],
-    ["ADJ Due",      inj.DateAdjDue ? fmtDate(inj.DateAdjDue) : null],
+    ["SW Due",       inj.SWDueDate    ? fmtDate(inj.SWDueDate)    : null],
+    ["ADJ Due",      inj.DateAdjDue   ? fmtDate(inj.DateAdjDue)   : null],
     ["Other SOL",    inj.OtherSOLDate ? fmtDate(inj.OtherSOLDate) : null],
     ["Follow-up",    inj.FollowUpDate ? fmtDate(inj.FollowUpDate) : null],
-    ["PD%",          inj.PermanentPercentage != null ? inj.PermanentPercentage + "%" : null],
+    ["PD%",          inj.PermanentPercentage ? inj.PermanentPercentage + "%" : null],
   ].filter(([,v]) => v);
   return `<div class="injury-row">
     <div class="injury-header">
       <span class="injury-date">${doi}${doiEnd}</span>
-      ${inj.ApplicationStatus ? `<span class="injury-type-badge">${esc(inj.ApplicationStatus)}</span>` : ""}
+      ${injTypeLabel ? `<span class="injury-type-badge">${esc(injTypeLabel)}</span>` : ""}
+      ${appStatusLabel ? `<span class="badge badge-other" style="font-size:10px">${esc(appStatusLabel)}</span>` : ""}
       ${inj.IsTemporary ? `<span class="badge" style="background:#fef3c7;color:#92400e">Temp</span>` : ""}
       ${inj.IsPermanent ? `<span class="badge" style="background:#dbeafe;color:#1e40af">Perm</span>` : ""}
     </div>
