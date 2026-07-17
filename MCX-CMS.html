@@ -1508,11 +1508,48 @@ async function submitEmailTask(e) {
 // ═══════════════════════════════════════════════
 //  FIRM CALENDAR TAB
 // ═══════════════════════════════════════════════
-// SP stores event times as UTC ISO strings but without the "Z" suffix
-// (unix_to_iso_dt in MC-CasesDBSync.py omits Z). Without Z, FullCalendar treats
-// the string as local time, displaying UTC as local → 7h off for Pacific.
-// Fix: append "Z" so FullCalendar knows to convert UTC → Pacific.
-const ensureUtcZ = s => (s && !s.endsWith("Z") && !/[+\-]\d{2}:\d{2}$/.test(s)) ? s + "Z" : (s || null);
+// ── Timezone helpers ──────────────────────────────────────────────────────────
+// SP stores event times as UTC ISO strings without "Z" (unix_to_iso_dt omits it).
+// Strategy: pre-convert every UTC string → naive Pacific string, then run
+// FullCalendar in timeZone:'UTC' so it treats the Pacific strings as literal
+// wall-clock times with no further offset. Avoids needing the Luxon adapter.
+
+const _pacFmt = new Intl.DateTimeFormat('en-US', {
+  timeZone:'America/Los_Angeles',
+  year:'numeric',month:'2-digit',day:'2-digit',
+  hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false
+});
+function _fmtParts(d) {
+  const p = {};
+  _pacFmt.formatToParts(d).forEach(x => { if (x.type !== 'literal') p[x.type] = x.value; });
+  p.hour = p.hour === '24' ? '00' : p.hour;
+  return p;
+}
+
+// UTC string (with or without Z) → naive Pacific ISO string ("YYYY-MM-DDTHH:MM:SS")
+function utcToPacificNaive(s) {
+  if (!s) return null;
+  const utc = (s.endsWith('Z') || /[+\-]\d{2}:\d{2}$/.test(s)) ? s : s + 'Z';
+  const d = new Date(utc);
+  if (isNaN(d)) return null;
+  const p = _fmtParts(d);
+  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:${p.second}`;
+}
+
+// Pacific date+time strings from a form → UTC ISO string for storage in SP
+function pacificToUTC(date, time) {
+  if (!date) return null;
+  const naive = (time ? `${date}T${time}:00` : `${date}T00:00:00`);
+  // Treat the Pacific naive string as UTC temporarily to get a Date
+  const fakeUTC = new Date(naive + 'Z');
+  if (isNaN(fakeUTC)) return null;
+  // Get Pacific display of that UTC moment
+  const p = _fmtParts(fakeUTC);
+  const pAsUTC = new Date(`${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:${p.second}Z`);
+  // Shift: real UTC = fakeUTC + (fakeUTC − pAsUTC)  [adds the Pacific→UTC offset]
+  return new Date(fakeUTC.getTime() + (fakeUTC - pAsUTC)).toISOString();
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 // ── Build FullCalendar event objects from raw SP data, applying active filters ──
 function buildFcEvents() {
@@ -1523,8 +1560,8 @@ function buildFcEvents() {
       return {
         id: i.id,
         title: f.Title || "(No title)",
-        start: ensureUtcZ(f.StartDate),
-        end:   ensureUtcZ(f.EndDate),
+        start: utcToPacificNaive(f.StartDate),
+        end:   utcToPacificNaive(f.EndDate),
         backgroundColor: EVENT_COLORS[f.EventType] || defaultEventColor,
         borderColor: "transparent",
         extendedProps: { eventType:f.EventType||"", caseName:f.CaseName||"", caseFileId:f.CaseFileID||"", location:f.Location||"", assignees:f.Assignees||"", notes:f.Notes||"" }
@@ -1601,7 +1638,7 @@ function applyCalendarFilter() {
 function initOrRefreshCalendar() {
   if (!fcCalendar) {
     fcCalendar = new FullCalendar.Calendar(document.getElementById("calendar"), {
-      timeZone: "America/Los_Angeles",
+      timeZone: "UTC",
       initialView: "timeGridWeek",
       headerToolbar: { left:"prev,next today", center:"title", right:"dayGridMonth,timeGridWeek,timeGridDay,listMonth" },
       buttonText: { today:"Today", month:"Month", week:"Week", day:"Day", list:"Agenda" },
@@ -1625,7 +1662,8 @@ function showCalDetail(event) {
   const chip = document.getElementById("cal-det-chip");
   chip.textContent = p.eventType || "Event";
   chip.style.background = event.backgroundColor || defaultEventColor;
-  const fmt = d => d ? new Date(d).toLocaleString("en-US",{weekday:"short",month:"short",day:"numeric",year:"numeric",hour:"numeric",minute:"2-digit",timeZone:"America/Los_Angeles"}) : null;
+  // startStr from FC (timeZone:'UTC') is already a naive Pacific string — display as UTC
+  const fmt = d => d ? new Date(d).toLocaleString("en-US",{weekday:"short",month:"short",day:"numeric",year:"numeric",hour:"numeric",minute:"2-digit",timeZone:"UTC"}) : null;
   const s = fmt(event.startStr), en = event.end ? fmt(event.endStr) : null;
   document.getElementById("cal-det-datetime").textContent = en ? `${s} → ${en}` : s;
   const v = (id, text) => { const el=document.getElementById(id); el.textContent=text||"—"; el.className=text?"val":"val muted"; };
@@ -1735,10 +1773,7 @@ async function submitCalEvent(e) {
   const endTime   = document.getElementById("cf-end-time").value;
   if (!title || !type || !startDate) return;
 
-  const toISO = (date, time) => {
-    if (!date) return null;
-    return new Date(time ? `${date}T${time}:00` : `${date}T00:00:00`).toISOString();
-  };
+  const toISO = (date, time) => pacificToUTC(date, time);
   const btn = document.getElementById("cal-form-submit-btn");
   btn.disabled = true;
   setStatus("cal-form-status","loading","Saving…");
@@ -1769,8 +1804,8 @@ async function submitCalEvent(e) {
       if (!res.ok) { const err=await res.json().catch(()=>({})); throw new Error(err?.error?.message||`HTTP ${res.status}`); }
       // update calendar event
       _calDetailEvent.setProp("title", fields.Title);
-      _calDetailEvent.setStart(fields.StartDate);
-      if (fields.EndDate) _calDetailEvent.setEnd(fields.EndDate);
+      _calDetailEvent.setStart(utcToPacificNaive(fields.StartDate));
+      if (fields.EndDate) _calDetailEvent.setEnd(utcToPacificNaive(fields.EndDate));
       _calDetailEvent.setProp("backgroundColor", EVENT_COLORS[fields.EventType]||defaultEventColor);
       _calDetailEvent.setExtendedProp("eventType",  fields.EventType||"");
       _calDetailEvent.setExtendedProp("caseName",   fields.CaseName||"");
@@ -1788,7 +1823,7 @@ async function submitCalEvent(e) {
       const created = await res.json();
       fcCalendar.addEvent({
         id: created.id, title: fields.Title,
-        start: fields.StartDate, end: fields.EndDate||null,
+        start: utcToPacificNaive(fields.StartDate), end: utcToPacificNaive(fields.EndDate)||null,
         backgroundColor: EVENT_COLORS[fields.EventType]||defaultEventColor,
         borderColor: "transparent",
         extendedProps: { eventType:fields.EventType||"", caseName:fields.CaseName||"", caseFileId:fields.CaseFileID||"", location:fields.Location||"", assignees:fields.Assignees||"", notes:fields.Notes||"" }
