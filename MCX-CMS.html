@@ -1508,6 +1508,12 @@ async function submitEmailTask(e) {
 // ═══════════════════════════════════════════════
 //  FIRM CALENDAR TAB
 // ═══════════════════════════════════════════════
+// SP stores event times as UTC ISO strings but without the "Z" suffix
+// (unix_to_iso_dt in MC-CasesDBSync.py omits Z). Without Z, FullCalendar treats
+// the string as local time, displaying UTC as local → 7h off for Pacific.
+// Fix: append "Z" so FullCalendar knows to convert UTC → Pacific.
+const ensureUtcZ = s => (s && !s.endsWith("Z") && !/[+\-]\d{2}:\d{2}$/.test(s)) ? s + "Z" : (s || null);
+
 // ── Build FullCalendar event objects from raw SP data, applying active filters ──
 function buildFcEvents() {
   const all = (window._rawFirmEvents || [])
@@ -1517,8 +1523,8 @@ function buildFcEvents() {
       return {
         id: i.id,
         title: f.Title || "(No title)",
-        start: f.StartDate,
-        end:   f.EndDate || null,
+        start: ensureUtcZ(f.StartDate),
+        end:   ensureUtcZ(f.EndDate),
         backgroundColor: EVENT_COLORS[f.EventType] || defaultEventColor,
         borderColor: "transparent",
         extendedProps: { eventType:f.EventType||"", caseName:f.CaseName||"", caseFileId:f.CaseFileID||"", location:f.Location||"", assignees:f.Assignees||"", notes:f.Notes||"" }
@@ -1595,6 +1601,7 @@ function applyCalendarFilter() {
 function initOrRefreshCalendar() {
   if (!fcCalendar) {
     fcCalendar = new FullCalendar.Calendar(document.getElementById("calendar"), {
+      timeZone: "America/Los_Angeles",
       initialView: "timeGridWeek",
       headerToolbar: { left:"prev,next today", center:"title", right:"dayGridMonth,timeGridWeek,timeGridDay,listMonth" },
       buttonText: { today:"Today", month:"Month", week:"Week", day:"Day", list:"Agenda" },
@@ -1618,7 +1625,7 @@ function showCalDetail(event) {
   const chip = document.getElementById("cal-det-chip");
   chip.textContent = p.eventType || "Event";
   chip.style.background = event.backgroundColor || defaultEventColor;
-  const fmt = d => d ? new Date(d).toLocaleString("en-US",{weekday:"short",month:"short",day:"numeric",year:"numeric",hour:"numeric",minute:"2-digit"}) : null;
+  const fmt = d => d ? new Date(d).toLocaleString("en-US",{weekday:"short",month:"short",day:"numeric",year:"numeric",hour:"numeric",minute:"2-digit",timeZone:"America/Los_Angeles"}) : null;
   const s = fmt(event.startStr), en = event.end ? fmt(event.endStr) : null;
   document.getElementById("cal-det-datetime").textContent = en ? `${s} → ${en}` : s;
   const v = (id, text) => { const el=document.getElementById(id); el.textContent=text||"—"; el.className=text?"val":"val muted"; };
