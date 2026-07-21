@@ -129,6 +129,7 @@ tr:hover td{background:#f8fafc}
 .task-done-row td{opacity:.55}
 .task-check{cursor:pointer;font-size:16px;user-select:none;white-space:nowrap}
 .task-check:hover{opacity:.75}
+/* task-check kept for legacy — rows now use task-sel-cb */
 .task-desc{max-width:360px;line-height:1.4}
 .task-desc.done-text{text-decoration:line-through;color:#9ca3af}
 .due-overdue{color:#dc2626;font-weight:600}
@@ -187,6 +188,13 @@ tr:hover td{background:#f8fafc}
 .btn-danger:disabled{background:#fca5a5;cursor:not-allowed}
 .btn-orange{background:#c45911;color:#fff;border:none;border-radius:6px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;transition:background .15s}
 .btn-orange:hover{background:#a34010}
+.btn-success{background:#16a34a;color:#fff;border:none;border-radius:6px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;transition:background .15s}
+.btn-success:hover{background:#15803d}
+.bulk-bar{display:none;align-items:center;gap:10px;padding:8px 16px;background:#fef3c7;border:1px solid #fde68a;border-radius:6px;margin:0 0 8px;font-size:13px}
+.bulk-bar.visible{display:flex}
+.task-row-selected td{background:#eff6ff}
+.task-sel-cb{width:16px;height:16px;cursor:pointer;accent-color:#1a3a5c;display:block;margin:auto}
+.task-sel-all{width:16px;height:16px;cursor:pointer;accent-color:#1a3a5c;display:block;margin:auto}
 .status-msg{border-radius:6px;padding:9px 12px;font-size:12px;margin-top:12px;display:none;line-height:1.4}
 .status-msg.loading{background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe;display:block}
 .status-msg.success{background:#dcfce7;color:#166534;border:1px solid #bbf7d0;display:block}
@@ -304,11 +312,16 @@ tr:hover td{background:#f8fafc}
         <div class="spacer"></div>
         <button class="btn-orange" onclick="openTaskModal()">+ Add Task</button>
       </div>
+      <div class="bulk-bar" id="bulk-bar">
+        <span id="bulk-count-label">0 selected</span>
+        <button class="btn-danger" style="padding:5px 14px;font-size:12px;margin-right:0" onclick="bulkDeleteSelected()">Delete Selected</button>
+        <button class="btn-secondary" style="padding:5px 14px;font-size:12px" onclick="clearSelection()">Clear</button>
+      </div>
       <div class="tasks-wrap">
         <table class="tasks-table">
           <thead>
             <tr>
-              <th style="width:36px"></th>
+              <th style="width:36px"><input type="checkbox" class="task-sel-all" id="task-sel-all" title="Select all" onchange="toggleSelectAll(this.checked)"></th>
               <th>Title</th>
               <th style="width:120px">Author</th>
               <th style="width:100px">Created</th>
@@ -505,6 +518,7 @@ tr:hover td{background:#f8fafc}
     </div>
     <div class="modal-footer">
       <button class="btn-danger" id="task-delete-btn" onclick="deleteTask()" style="display:none">Delete</button>
+      <button class="btn-success" id="task-complete-btn" onclick="completeTaskFromModal()" style="display:none">Mark Complete</button>
       <button class="btn-secondary" onclick="closeTaskModal()">Cancel</button>
       <button class="btn-primary" id="task-submit-btn" onclick="submitTask(event)">Save Task</button>
     </div>
@@ -581,6 +595,7 @@ tr:hover td{background:#f8fafc}
       </form>
     </div>
     <div class="modal-footer">
+      <button class="btn-success" id="email-task-complete-btn" onclick="completeEmailTaskFromModal()">Mark Complete</button>
       <button class="btn-secondary" onclick="closeEmailTaskModal()">Cancel</button>
       <button class="btn-primary" id="email-task-submit-btn" onclick="submitEmailTask(event)">Save</button>
     </div>
@@ -1273,6 +1288,79 @@ function initTypeaheads() {
   );
 }
 
+// ═══════════════════════════════════════════════
+//  BULK TASK SELECTION
+// ═══════════════════════════════════════════════
+let _selectedTasks = new Set(); // "source:spId"
+
+function toggleRowSelect(rowKey, checked) {
+  if (checked) _selectedTasks.add(rowKey);
+  else _selectedTasks.delete(rowKey);
+  updateBulkBar();
+  // Sync select-all checkbox
+  const allCbs = document.querySelectorAll(".task-sel-cb");
+  const selAll = document.getElementById("task-sel-all");
+  if (selAll) selAll.checked = allCbs.length > 0 && [...allCbs].every(cb => cb.checked);
+}
+
+function toggleSelectAll(checked) {
+  document.querySelectorAll(".task-sel-cb").forEach(cb => {
+    cb.checked = checked;
+    const rowKey = cb.closest("tr")?.dataset?.rowkey;
+    if (rowKey) { if (checked) _selectedTasks.add(rowKey); else _selectedTasks.delete(rowKey); }
+  });
+  updateBulkBar();
+}
+
+function updateBulkBar() {
+  const bar = document.getElementById("bulk-bar");
+  const lbl = document.getElementById("bulk-count-label");
+  const n = _selectedTasks.size;
+  if (bar) bar.classList.toggle("visible", n > 0);
+  if (lbl) lbl.textContent = `${n} selected`;
+}
+
+function clearSelection() {
+  _selectedTasks.clear();
+  document.querySelectorAll(".task-sel-cb").forEach(cb => cb.checked = false);
+  const selAll = document.getElementById("task-sel-all");
+  if (selAll) selAll.checked = false;
+  updateBulkBar();
+}
+
+async function bulkDeleteSelected() {
+  if (_selectedTasks.size === 0) return;
+  const n = _selectedTasks.size;
+  if (!confirm(`Delete ${n} task${n !== 1 ? "s" : ""}?\nThis cannot be undone.`)) return;
+  let token;
+  try { token = await getToken(); } catch(e) { alert("Auth error: " + e.message); return; }
+  const errors = [];
+  for (const rowKey of [..._selectedTasks]) {
+    const sep  = rowKey.indexOf(":");
+    const source = rowKey.slice(0, sep);
+    const spId   = rowKey.slice(sep + 1);
+    const listId = source === "email" ? EMAIL_TASKS_LIST_ID : TASKS_LIST_ID;
+    if (!listId) continue;
+    try {
+      const res = await fetch(
+        `${GRAPH}/sites/${SITE_HOST}:${SITE_PATH}:/lists/${listId}/items/${spId}`,
+        { method:"DELETE", headers:{"Authorization":`Bearer ${token}`} }
+      );
+      if (!res.ok && res.status !== 204) throw new Error(`HTTP ${res.status}`);
+      if (source === "email") {
+        const i = EMAIL_TASKS_ARR.findIndex(t => t._spId === spId);
+        if (i >= 0) EMAIL_TASKS_ARR.splice(i, 1);
+      } else {
+        const i = TASKS_ARR.findIndex(t => t._spId === spId);
+        if (i >= 0) TASKS_ARR.splice(i, 1);
+      }
+    } catch(e) { errors.push(`${rowKey}: ${e.message}`); }
+  }
+  _selectedTasks.clear();
+  renderTasksTable();
+  if (errors.length) alert("Some deletes failed:\n" + errors.join("\n"));
+}
+
 function renderTasksTable() {
   const status   = document.getElementById("status-filter")?.value   || "incomplete";
   const assignee = document.getElementById("assignee-filter")?.value || "";
@@ -1328,6 +1416,8 @@ function renderTasksTable() {
 
   tbody.innerHTML = filtered.map(t => {
     const done     = t.done;
+    const rowKey   = `${t._source}:${t._spId}`;
+    const isSel    = _selectedTasks.has(rowKey);
     const srcBadge = t._source === "email"
       ? `<span class="task-source-badge src-email">Email</span>`
       : `<span class="task-source-badge src-mc">MC</span>`;
@@ -1338,14 +1428,11 @@ function renderTasksTable() {
     const cname    = t.caseId && caseMap[t.caseId]
       ? `<a href="#" onclick="gotoCase(${t.caseId});return false" style="color:#1a3a5c">${esc(fmtCaseName(caseMap[t.caseId].Title || ""))}</a>`
       : (t.caseId ? `<span style="color:#9ca3af">Case ${t.caseId}</span>` : `<span style="color:#9ca3af">—</span>`);
-    const toggleFn = t._source === "email"
-      ? `toggleEmailTask('${t._spId}',${!done})`
-      : `toggleTask('${t._spId}',${!done})`;
     const editFn   = t._source === "email"
       ? `openEmailTaskModal('${t._spId}')`
       : `openTaskModal('${t._spId}')`;
-    return `<tr class="${done ? "task-done-row" : ""}">
-      <td><span class="task-check" title="${done ? "Mark incomplete" : "Mark complete"}" onclick="${toggleFn}">${done ? "✅" : "⬜"}</span></td>
+    return `<tr class="${done ? "task-done-row" : ""}${isSel ? " task-row-selected" : ""}" data-rowkey="${rowKey}">
+      <td><input type="checkbox" class="task-sel-cb" ${isSel ? "checked" : ""} onchange="toggleRowSelect('${rowKey}', this.checked)"></td>
       <td><div class="task-desc${done ? " done-text" : ""}">${srcBadge}${title}</div></td>
       <td style="color:#6b7280;font-size:12px">${author}</td>
       <td style="color:#6b7280;font-size:12px">${created}</td>
@@ -1357,6 +1444,19 @@ function renderTasksTable() {
       </td>
     </tr>`;
   }).join("") || `<tr><td colspan="8" style="text-align:center;padding:24px;color:#9ca3af">No tasks</td></tr>`;
+
+  // Keep bulk bar in sync after re-render (prune selected IDs no longer in view)
+  const visibleKeys = new Set(filtered.map(t => `${t._source}:${t._spId}`));
+  for (const k of [..._selectedTasks]) { if (!visibleKeys.has(k)) _selectedTasks.delete(k); }
+  updateBulkBar();
+
+  // Sync select-all checkbox
+  const selAll = document.getElementById("task-sel-all");
+  if (selAll) {
+    const allCbs = document.querySelectorAll(".task-sel-cb");
+    selAll.checked = allCbs.length > 0 && [...allCbs].every(cb => cb.checked);
+    selAll.indeterminate = !selAll.checked && _selectedTasks.size > 0;
+  }
 }
 
 function fmtDue(dateStr) {
@@ -1413,6 +1513,7 @@ function openTaskModal(spId) {
   document.getElementById("task-form-title").textContent = spId ? "Edit Task" : "Add Task";
   document.getElementById("task-submit-btn").disabled = false;
 
+  const completeBtn = document.getElementById("task-complete-btn");
   if (spId) {
     const t = TASKS_ARR.find(t => t._spId === spId);
     if (t) {
@@ -1423,8 +1524,23 @@ function openTaskModal(spId) {
       document.getElementById("tf-case-name").value = t.CaseFileID && caseMap[t.CaseFileID] ? (caseMap[t.CaseFileID].Title || "") : "";
       document.getElementById("tf-priority").value  = t.Priority || 3;
     }
+    if (completeBtn) {
+      const done = t && !!t.Complete;
+      completeBtn.style.display = "inline-block";
+      completeBtn.textContent = done ? "Mark Incomplete" : "Mark Complete";
+    }
+  } else {
+    if (completeBtn) completeBtn.style.display = "none";
   }
   document.getElementById("overlay-task-form").classList.add("active");
+}
+
+async function completeTaskFromModal() {
+  if (!_taskFormSpId) return;
+  const t = TASKS_ARR.find(t => t._spId === _taskFormSpId);
+  const newComplete = t ? !t.Complete : true;
+  await toggleTask(_taskFormSpId, newComplete);
+  document.getElementById("overlay-task-form").classList.remove("active");
 }
 
 function closeTaskModal(e) {
@@ -1530,9 +1646,24 @@ function openEmailTaskModal(spId) {
   document.getElementById("etf-notes").value    = t.Notes || "";
   document.getElementById("etf-status").value   = t.Status || "Open";
 
+  // Complete button label
+  const emailCompleteBtn = document.getElementById("email-task-complete-btn");
+  if (emailCompleteBtn) {
+    const done = t.Status === "Resolved";
+    emailCompleteBtn.textContent = done ? "Mark Open" : "Mark Complete";
+  }
+
   setStatus("email-task-form-status", "");
   document.getElementById("email-task-submit-btn").disabled = false;
   document.getElementById("overlay-email-task-form").classList.add("active");
+}
+
+async function completeEmailTaskFromModal() {
+  if (!_emailTaskFormSpId) return;
+  const t = EMAIL_TASKS_ARR.find(t => t._spId === _emailTaskFormSpId);
+  const newDone = t ? t.Status !== "Resolved" : true;
+  await toggleEmailTask(_emailTaskFormSpId, newDone);
+  document.getElementById("overlay-email-task-form").classList.remove("active");
 }
 
 function closeEmailTaskModal(e) {
