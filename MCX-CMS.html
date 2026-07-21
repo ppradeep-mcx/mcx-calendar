@@ -8,34 +8,34 @@
 <script src="https://unpkg.com/@azure/msal-browser@2.38.3/lib/msal-browser.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:14px;color:#1f2937;background:#f3f4f6;height:100vh;overflow:hidden;display:flex;flex-direction:column}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:15px;color:#1f2937;background:#f3f4f6;height:100vh;overflow:hidden;display:flex;flex-direction:column}
 
 /* ── HEADER ── */
 #hdr{background:#1a3a5c;color:#fff;height:52px;display:flex;align-items:center;padding:0 20px;gap:8px;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.3)}
-#hdr .logo{font-size:18px;font-weight:700;letter-spacing:.5px;margin-right:8px;white-space:nowrap}
-.tab-btn{background:none;border:none;color:rgba(255,255,255,.7);font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;cursor:pointer;transition:background .15s,color .15s;white-space:nowrap}
+#hdr .logo{font-size:19px;font-weight:700;letter-spacing:.5px;margin-right:8px;white-space:nowrap}
+.tab-btn{background:none;border:none;color:rgba(255,255,255,.7);font-size:14px;font-weight:500;padding:6px 12px;border-radius:6px;cursor:pointer;transition:background .15s,color .15s;white-space:nowrap}
 .tab-btn:hover{background:rgba(255,255,255,.15);color:#fff}
 .tab-btn.active{background:rgba(255,255,255,.22);color:#fff}
 .hdr-right{margin-left:auto;display:flex;align-items:center;gap:10px}
-.user-badge{font-size:12px;opacity:.8;white-space:nowrap}
-.btn-signout{background:transparent;color:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.3);border-radius:5px;padding:4px 10px;font-size:12px;cursor:pointer;transition:all .15s}
+.user-badge{font-size:13px;opacity:.8;white-space:nowrap}
+.btn-signout{background:transparent;color:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.3);border-radius:5px;padding:4px 10px;font-size:13px;cursor:pointer;transition:all .15s}
 .btn-signout:hover{background:rgba(255,255,255,.1);color:#fff}
 
 /* ── LOADING OVERLAY ── */
 #loading-overlay{position:fixed;inset:0;background:rgba(243,244,246,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:3000;gap:14px}
 .spinner{width:36px;height:36px;border:4px solid #d1d5db;border-top-color:#1a3a5c;border-radius:50%;animation:spin .75s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-#loading-msg{font-size:14px;color:#374151}
+#loading-msg{font-size:15px;color:#374151}
 
 /* ── AUTH SCREEN ── */
 #screen-auth{position:fixed;inset:0;background:#f0f2f5;display:flex;align-items:center;justify-content:center;z-index:2000}
 .auth-card{background:#fff;border-radius:10px;box-shadow:0 4px 24px rgba(0,0,0,.1);width:360px;overflow:hidden;text-align:center}
 .auth-header{background:#1a3a5c;color:#fff;padding:28px 24px}
-.auth-header .firm{font-size:10px;letter-spacing:2px;text-transform:uppercase;opacity:.6}
-.auth-header h1{font-size:20px;font-weight:600;margin-top:4px}
+.auth-header .firm{font-size:11px;letter-spacing:2px;text-transform:uppercase;opacity:.6}
+.auth-header h1{font-size:21px;font-weight:600;margin-top:4px}
 .auth-body{padding:28px 24px}
-.auth-body p{color:#555;font-size:14px;margin-bottom:20px;line-height:1.5}
-.btn-ms{background:#0078d4;color:#fff;border:none;border-radius:6px;padding:11px 24px;font-size:14px;cursor:pointer;width:100%;display:flex;align-items:center;justify-content:center;gap:10px;transition:background .15s}
+.auth-body p{color:#555;font-size:15px;margin-bottom:20px;line-height:1.5}
+.btn-ms{background:#0078d4;color:#fff;border:none;border-radius:6px;padding:11px 24px;font-size:15px;cursor:pointer;width:100%;display:flex;align-items:center;justify-content:center;gap:10px;transition:background .15s}
 .btn-ms:hover{background:#005a9e}
 .btn-ms svg{width:18px;height:18px}
 
@@ -44,51 +44,51 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;f
 #content{flex:1;overflow:hidden;display:flex}
 
 /* ── FILTER SELECT (shared) ── */
-.search-box{padding:7px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;outline:none;min-width:220px}
+.search-box{padding:7px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;outline:none;min-width:220px}
 .search-box:focus{border-color:#1a3a5c;box-shadow:0 0 0 2px rgba(26,58,92,.15)}
-.filter-select{padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;outline:none;background:#fff}
+.filter-select{padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;outline:none;background:#fff}
 
 /* ── FULL-WIDTH LIST / DETAIL PATTERN ── */
 .list-view-pane{display:flex;flex-direction:column;flex:1;overflow:hidden}
 .detail-view-pane{display:flex;flex-direction:column;flex:1;overflow:hidden}
 .list-toolbar{display:flex;align-items:center;gap:10px;padding:12px 20px;background:#fff;border-bottom:1px solid #e5e7eb;flex-shrink:0;flex-wrap:wrap}
-.list-toolbar h2{margin:0;font-size:16px;font-weight:700;color:#1a3a5c;white-space:nowrap}
-.list-count{font-size:12px;color:#9ca3af;white-space:nowrap}
-.detail-back-btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:#fff;border:1px solid #d1d5db;border-radius:6px;font-size:13px;cursor:pointer;color:#374151;transition:background .15s;white-space:nowrap;flex-shrink:0}
+.list-toolbar h2{margin:0;font-size:17px;font-weight:700;color:#1a3a5c;white-space:nowrap}
+.list-count{font-size:13px;color:#9ca3af;white-space:nowrap}
+.detail-back-btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:#fff;border:1px solid #d1d5db;border-radius:6px;font-size:14px;cursor:pointer;color:#374151;transition:background .15s;white-space:nowrap;flex-shrink:0}
 .detail-back-btn:hover{background:#f9fafb}
-.detail-pane-title{font-size:15px;font-weight:700;color:#1a3a5c;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
+.detail-pane-title{font-size:16px;font-weight:700;color:#1a3a5c;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
 .list-wrap{flex:1;overflow-y:auto;padding:16px 20px 24px}
 .detail-main{flex:1;overflow-y:auto;padding:16px 20px 24px}
 
 /* ── LIST TABLE (cases + contacts) ── */
-.list-table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:13px;background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);overflow:hidden}
-.list-table th{padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;border-bottom:2px solid #f3f4f6;background:#f9fafb;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.list-table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:14px;background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);overflow:hidden}
+.list-table th{padding:10px 14px;text-align:left;font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;border-bottom:2px solid #f3f4f6;background:#f9fafb;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .list-table td{padding:10px 14px;border-bottom:1px solid #f3f4f6;vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .list-table tr:last-child td{border-bottom:none}
 .list-table tbody tr{cursor:pointer}
 .list-table tbody tr:hover td{background:#e8f0fe}
 .list-table .cell-wrap{white-space:normal;line-height:1.35}  /* allow name cell to wrap */
-.list-item-name{font-weight:500;font-size:13px;line-height:1.3}
-.list-item-sub{font-size:11px;color:#6b7280;display:flex;align-items:center;gap:6px}
+.list-item-name{font-weight:500;font-size:14px;line-height:1.3}
+.list-item-sub{font-size:12px;color:#6b7280;display:flex;align-items:center;gap:6px}
 .main-panel{flex:1;overflow-y:auto;padding:20px;background:#f3f4f6}
-.placeholder{display:flex;align-items:center;justify-content:center;height:100%;color:#9ca3af;font-size:15px}
+.placeholder{display:flex;align-items:center;justify-content:center;height:100%;color:#9ca3af;font-size:16px}
 
 /* ── CARDS ── */
 .card{background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-bottom:16px;overflow:hidden}
-.card-title{font-size:12px;font-weight:600;color:#4b5563;text-transform:uppercase;letter-spacing:.6px;padding:12px 16px;border-bottom:1px solid #f3f4f6}
+.card-title{font-size:13px;font-weight:600;color:#4b5563;text-transform:uppercase;letter-spacing:.6px;padding:12px 16px;border-bottom:1px solid #f3f4f6}
 .card-body{padding:16px}
 .case-header{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;padding:16px;border-bottom:1px solid #f3f4f6}
-.case-title{font-size:19px;font-weight:700;color:#1a3a5c;flex:1}
-.case-side{font-size:12px;color:#6b7280;margin-top:4px;text-transform:capitalize}
+.case-title{font-size:20px;font-weight:700;color:#1a3a5c;flex:1}
+.case-side{font-size:13px;color:#6b7280;margin-top:4px;text-transform:capitalize}
 .info-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
-.info-item label{font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:3px}
-.info-item span{font-size:13px;color:#1f2937}
+.info-item label{font-size:12px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:3px}
+.info-item span{font-size:14px;color:#1f2937}
 .comments-block{margin-top:12px}
-.comments-block label{font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:6px}
-.comments-block pre{font-family:inherit;font-size:13px;color:#374151;white-space:pre-wrap;background:#f9fafb;border-radius:6px;padding:10px;line-height:1.5}
+.comments-block label{font-size:12px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:6px}
+.comments-block pre{font-family:inherit;font-size:14px;color:#374151;white-space:pre-wrap;background:#f9fafb;border-radius:6px;padding:10px;line-height:1.5}
 
 /* ── STATUS BADGES ── */
-.badge{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:12px}
+.badge{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:12px}
 .badge-open{background:#dcfce7;color:#166534}
 .badge-closed{background:#f3f4f6;color:#6b7280}
 .badge-pending{background:#fef9c3;color:#854d0e}
@@ -99,25 +99,25 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;f
 .party-cards{display:flex;flex-wrap:wrap;gap:10px}
 .party-card{background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:12px 14px;min-width:200px;max-width:280px;cursor:pointer;transition:border-color .15s,box-shadow .15s}
 .party-card:hover{border-color:#1a3a5c;box-shadow:0 2px 8px rgba(26,58,92,.12)}
-.party-role{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px}
-.party-name{font-weight:600;font-size:13px;margin-bottom:3px}
-.party-co{font-size:12px;color:#6b7280}
-.party-phone{font-size:12px;color:#374151;margin-top:4px}
-.party-claim{font-size:11px;color:#9ca3af;margin-top:3px}
+.party-role{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px}
+.party-name{font-weight:600;font-size:14px;margin-bottom:3px}
+.party-co{font-size:13px;color:#6b7280}
+.party-phone{font-size:13px;color:#374151;margin-top:4px}
+.party-claim{font-size:12px;color:#9ca3af;margin-top:3px}
 
 /* ── INJURIES ── */
 .injury-row{padding:12px 0;border-bottom:1px solid #f3f4f6}
 .injury-row:last-child{border-bottom:none}
 .injury-header{display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap}
-.injury-type-badge{font-size:11px;font-weight:600;padding:2px 8px;border-radius:12px;background:#dbeafe;color:#1e40af}
-.injury-date{font-weight:600;font-size:13px}
+.injury-type-badge{font-size:12px;font-weight:600;padding:2px 8px;border-radius:12px;background:#dbeafe;color:#1e40af}
+.injury-date{font-weight:600;font-size:14px}
 .injury-meta{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-top:8px}
-.injury-meta-item label{font-size:10px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.4px;display:block}
-.injury-meta-item span{font-size:12px;color:#374151}
+.injury-meta-item label{font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.4px;display:block}
+.injury-meta-item span{font-size:13px;color:#374151}
 
 /* ── TABLES ── */
-table{width:100%;border-collapse:collapse;font-size:13px}
-th{text-align:left;padding:8px 10px;font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;border-bottom:2px solid #f3f4f6;background:#f9fafb}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{text-align:left;padding:8px 10px;font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;border-bottom:2px solid #f3f4f6;background:#f9fafb}
 td{padding:9px 10px;border-bottom:1px solid #f3f4f6;vertical-align:top}
 tr:last-child td{border-bottom:none}
 tr:hover td{background:#f8fafc}
@@ -125,23 +125,23 @@ tr:hover td{background:#f8fafc}
 /* ── TASKS TAB ── */
 #tab-tasks{flex:1;overflow:hidden;display:none;flex-direction:column}
 .tasks-toolbar{display:flex;align-items:center;gap:10px;padding:14px 20px;background:#fff;border-bottom:1px solid #e5e7eb;flex-shrink:0;flex-wrap:wrap}
-.tasks-toolbar h2{font-size:16px;font-weight:700;color:#1a3a5c;margin-right:4px}
-.tasks-count{font-size:13px;color:#9ca3af}
+.tasks-toolbar h2{font-size:17px;font-weight:700;color:#1a3a5c;margin-right:4px}
+.tasks-count{font-size:14px;color:#9ca3af}
 .tasks-toolbar .spacer{flex:1}
 .tasks-wrap{flex:1;overflow-y:auto;padding:16px 20px}
-.tasks-table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:13px;background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);overflow:hidden}
-.tasks-table th{padding:10px 12px;text-align:left;font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;border-bottom:2px solid #f3f4f6;background:#f9fafb;white-space:nowrap}
+.tasks-table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:14px;background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);overflow:hidden}
+.tasks-table th{padding:10px 12px;text-align:left;font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;border-bottom:2px solid #f3f4f6;background:#f9fafb;white-space:nowrap}
 .tasks-table td{padding:10px 12px;border-bottom:1px solid #f3f4f6;vertical-align:middle}
 .tasks-table tr:last-child td{border-bottom:none}
 .tasks-table tr:hover td{background:#f8fafc}
 .typeahead-wrap{position:relative;width:100%}
 .typeahead-dropdown{position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #d1d5db;border-radius:0 0 6px 6px;box-shadow:0 4px 12px rgba(0,0,0,.12);z-index:2000;max-height:200px;overflow-y:auto;display:none}
 .typeahead-dropdown.open{display:block}
-.typeahead-option{padding:8px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid #f3f4f6}
+.typeahead-option{padding:8px 12px;font-size:14px;cursor:pointer;border-bottom:1px solid #f3f4f6}
 .typeahead-option:last-child{border-bottom:none}
 .typeahead-option:hover{background:#eff6ff}
 .task-done-row td{opacity:.55}
-.task-check{cursor:pointer;font-size:16px;user-select:none;white-space:nowrap}
+.task-check{cursor:pointer;font-size:17px;user-select:none;white-space:nowrap}
 .task-check:hover{opacity:.75}
 /* task-check kept for legacy — rows now use task-sel-cb */
 .task-desc{display:flex;align-items:center;gap:5px;overflow:hidden;min-width:0;line-height:1.4}
@@ -152,27 +152,27 @@ tr:hover td{background:#f8fafc}
 .due-overdue{color:#dc2626;font-weight:600}
 .due-soon{color:#d97706;font-weight:600}
 .due-ok{color:#6b7280}
-.task-action-btn{background:none;border:1px solid #d1d5db;border-radius:5px;padding:3px 9px;font-size:12px;cursor:pointer;transition:all .15s;color:#374151}
+.task-action-btn{background:none;border:1px solid #d1d5db;border-radius:5px;padding:3px 9px;font-size:13px;cursor:pointer;transition:all .15s;color:#374151}
 .task-action-btn:hover{background:#f3f4f6;border-color:#9ca3af}
 .task-action-btn.danger:hover{background:#fee2e2;border-color:#fca5a5;color:#dc2626}
-.task-source-badge{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.3px;padding:1px 6px;border-radius:10px;vertical-align:middle;margin-right:5px;text-transform:uppercase}
+.task-source-badge{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.3px;padding:1px 6px;border-radius:10px;vertical-align:middle;margin-right:5px;text-transform:uppercase}
 .src-mc{background:#dbeafe;color:#1e40af}
 .src-email{background:#ffedd5;color:#c2410c}
-.etf-readonly{padding:5px 0;font-size:13px;color:#374151;min-height:28px}
+.etf-readonly{padding:5px 0;font-size:14px;color:#374151;min-height:28px}
 
 /* ── CALENDAR TAB ── */
 #tab-calendar{flex:1;overflow:hidden;display:none;flex-direction:column}
 .cal-toolbar{display:flex;align-items:center;gap:10px;padding:10px 20px;background:#fff;border-bottom:1px solid #e5e7eb;flex-shrink:0;flex-wrap:wrap}
-.cal-legend{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:12px;color:#555}
+.cal-legend{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:13px;color:#555}
 .legend-dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:3px}
 #cal-wrap{flex:1;padding:14px 20px;overflow:hidden;display:flex;flex-direction:column}
 #calendar{flex:1;min-height:0}
 .fc{height:100%!important;font-family:inherit}
-.fc .fc-toolbar-title{font-size:15px;font-weight:600}
-.fc .fc-button-primary{background:#1a3a5c;border-color:#1a3a5c;font-size:12px}
+.fc .fc-toolbar-title{font-size:16px;font-weight:600}
+.fc .fc-button-primary{background:#1a3a5c;border-color:#1a3a5c;font-size:13px}
 .fc .fc-button-primary:hover{background:#243f5e;border-color:#243f5e}
 .fc .fc-button-primary:not(:disabled).fc-button-active{background:#c45911;border-color:#c45911}
-.fc .fc-event{cursor:pointer;border:none!important;border-radius:3px;font-size:11px}
+.fc .fc-event{cursor:pointer;border:none!important;border-radius:3px;font-size:12px}
 .fc .fc-day-today{background:rgba(196,89,17,.05)!important}
 .fc .fc-col-header-cell{background:#f8fafc}
 
@@ -183,51 +183,51 @@ tr:hover td{background:#f8fafc}
 .modal-sm{max-width:440px}
 .modal-md{max-width:580px}
 .modal-header{padding:18px 22px 14px;border-bottom:1px solid #e5e7eb;display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
-.modal-header h2{font-size:16px;font-weight:600}
+.modal-header h2{font-size:17px;font-weight:600}
 .modal-body{padding:18px 22px}
 .modal-footer{padding:14px 22px;border-top:1px solid #e5e7eb;display:flex;gap:10px;justify-content:flex-end}
-.btn-close{background:none;border:none;cursor:pointer;color:#9ca3af;font-size:20px;line-height:1;padding:0;flex-shrink:0;transition:color .15s}
+.btn-close{background:none;border:none;cursor:pointer;color:#9ca3af;font-size:21px;line-height:1;padding:0;flex-shrink:0;transition:color .15s}
 .btn-close:hover{color:#374151}
 .form-row{margin-bottom:14px}
-.form-row label{display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:4px}
+.form-row label{display:block;font-size:13px;font-weight:600;color:#374151;margin-bottom:4px}
 .form-row label .req{color:#dc2626;margin-left:2px}
-.form-row input,.form-row select,.form-row textarea{width:100%;border:1px solid #d1d5db;border-radius:6px;padding:8px 10px;font-size:13px;color:#111;background:#fff;font-family:inherit;transition:border .15s,box-shadow .15s}
+.form-row input,.form-row select,.form-row textarea{width:100%;border:1px solid #d1d5db;border-radius:6px;padding:8px 10px;font-size:14px;color:#111;background:#fff;font-family:inherit;transition:border .15s,box-shadow .15s}
 .form-row input:focus,.form-row select:focus,.form-row textarea:focus{outline:none;border-color:#1a3a5c;box-shadow:0 0 0 3px rgba(26,58,92,.1)}
 .form-row textarea{resize:vertical;min-height:68px}
 .form-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.btn-primary{background:#1a3a5c;color:#fff;border:none;border-radius:6px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;transition:background .15s}
+.btn-primary{background:#1a3a5c;color:#fff;border:none;border-radius:6px;padding:9px 18px;font-size:14px;font-weight:600;cursor:pointer;transition:background .15s}
 .btn-primary:hover:not(:disabled){background:#243f5e}
 .btn-primary:disabled{opacity:.55;cursor:not-allowed}
-.btn-secondary{background:#fff;color:#374151;border:1px solid #d1d5db;border-radius:6px;padding:9px 18px;font-size:13px;cursor:pointer;transition:background .15s}
+.btn-secondary{background:#fff;color:#374151;border:1px solid #d1d5db;border-radius:6px;padding:9px 18px;font-size:14px;cursor:pointer;transition:background .15s}
 .btn-secondary:hover{background:#f9fafb}
-.btn-danger{background:#dc2626;color:#fff;border:none;border-radius:6px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;transition:background .15s;margin-right:auto}
+.btn-danger{background:#dc2626;color:#fff;border:none;border-radius:6px;padding:9px 18px;font-size:14px;font-weight:600;cursor:pointer;transition:background .15s;margin-right:auto}
 .btn-danger:hover:not(:disabled){background:#b91c1c}
 .btn-danger:disabled{background:#fca5a5;cursor:not-allowed}
-.btn-orange{background:#c45911;color:#fff;border:none;border-radius:6px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;transition:background .15s}
+.btn-orange{background:#c45911;color:#fff;border:none;border-radius:6px;padding:9px 18px;font-size:14px;font-weight:600;cursor:pointer;transition:background .15s}
 .btn-orange:hover{background:#a34010}
-.btn-success{background:#16a34a;color:#fff;border:none;border-radius:6px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;transition:background .15s}
+.btn-success{background:#16a34a;color:#fff;border:none;border-radius:6px;padding:9px 18px;font-size:14px;font-weight:600;cursor:pointer;transition:background .15s}
 .btn-success:hover{background:#15803d}
-.bulk-bar{display:none;align-items:center;gap:10px;padding:8px 16px;background:#fef3c7;border:1px solid #fde68a;border-radius:6px;margin:0 0 8px;font-size:13px}
+.bulk-bar{display:none;align-items:center;gap:10px;padding:8px 16px;background:#fef3c7;border:1px solid #fde68a;border-radius:6px;margin:0 0 8px;font-size:14px}
 .bulk-bar.visible{display:flex}
 .task-row-selected td{background:#eff6ff}
 .task-sel-cb{width:16px;height:16px;cursor:pointer;accent-color:#1a3a5c;display:block;margin:auto}
 .task-sel-all{width:16px;height:16px;cursor:pointer;accent-color:#1a3a5c;display:block;margin:auto}
-.status-msg{border-radius:6px;padding:9px 12px;font-size:12px;margin-top:12px;display:none;line-height:1.4}
+.status-msg{border-radius:6px;padding:9px 12px;font-size:13px;margin-top:12px;display:none;line-height:1.4}
 .status-msg.loading{background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe;display:block}
 .status-msg.success{background:#dcfce7;color:#166534;border:1px solid #bbf7d0;display:block}
 .status-msg.error{background:#fee2e2;color:#991b1b;border:1px solid #fecaca;display:block}
 /* detail modal rows */
-.detail-row{display:flex;gap:12px;margin-bottom:12px;font-size:13px}
+.detail-row{display:flex;gap:12px;margin-bottom:12px;font-size:14px}
 .detail-row .label{font-weight:600;color:#374151;min-width:100px;flex-shrink:0}
 .detail-row .val{color:#111;line-height:1.5}
 .detail-row .val.muted{color:#9ca3af;font-style:italic}
-.event-type-chip{font-size:11px;font-weight:600;padding:2px 8px;border-radius:12px;color:#fff}
+.event-type-chip{font-size:12px;font-weight:600;padding:2px 8px;border-radius:12px;color:#fff}
 /* ── CALENDAR FILTER CHIPS ── */
-.cal-filter-chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;border:1.5px solid #d1d5db;font-size:12px;font-weight:500;cursor:pointer;transition:all .15s;background:#f9fafb;color:#4b5563;user-select:none;white-space:nowrap}
+.cal-filter-chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;border:1.5px solid #d1d5db;font-size:13px;font-weight:500;cursor:pointer;transition:all .15s;background:#f9fafb;color:#4b5563;user-select:none;white-space:nowrap}
 .cal-filter-chip .chip-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
 .cal-filter-chip:hover:not(.active){background:#e5e7eb;border-color:#9ca3af}
 .cal-filter-chip.active{color:#fff!important;border-color:transparent!important}
-#cal-filter-clear{font-size:11px;color:#6b7280;cursor:pointer;padding:4px 8px;border-radius:4px;border:1px solid #d1d5db;background:#fff;visibility:hidden;white-space:nowrap}
+#cal-filter-clear{font-size:12px;color:#6b7280;cursor:pointer;padding:4px 8px;border-radius:4px;border:1px solid #d1d5db;background:#fff;visibility:hidden;white-space:nowrap}
 #cal-filter-clear:hover{background:#f3f4f6;color:#374151}
 </style>
 </head>
@@ -284,15 +284,15 @@ tr:hover td{background:#f8fafc}
         <div class="list-toolbar">
           <h2>Cases</h2>
           <span class="list-count" id="cases-count"></span>
-          <input class="search-box" id="case-search" placeholder="Search cases, claim #…" oninput="filterCases()" style="flex:1;min-width:180px;max-width:300px">
+          <input class="search-box" id="case-search" placeholder="Search cases, claim #, ADJ…" oninput="filterCases()" style="flex:1;min-width:180px;max-width:600px">
           <select class="filter-select" id="case-status-filter" style="width:140px" onchange="filterCases()">
             <option value="">All Statuses</option>
           </select>
           <select class="filter-select" id="case-type-filter" style="width:130px" onchange="filterCases()">
             <option value="">All Types</option>
           </select>
-          <select class="filter-select" id="case-staff-filter" style="width:160px" onchange="filterCases()">
-            <option value="">All Staff</option>
+          <select class="filter-select" id="case-staff-filter" style="width:180px" onchange="filterCases()">
+            <option value="">All Sr. Associates</option>
           </select>
         </div>
         <div class="list-wrap">
@@ -302,9 +302,9 @@ tr:hover td{background:#f8fafc}
                 <th>Case Name</th>
                 <th style="width:130px">Type</th>
                 <th style="width:110px">Status</th>
-                <th style="width:150px">Attorney (R)</th>
+                <th style="width:170px">Senior Associate</th>
                 <th style="width:140px">Paralegal</th>
-                <th style="width:150px">Claim #</th>
+                <th style="width:170px">ADJ Number(s)</th>
               </tr>
             </thead>
             <tbody id="cases-tbody"></tbody>
@@ -328,7 +328,7 @@ tr:hover td{background:#f8fafc}
         <div class="list-toolbar">
           <h2>Contacts</h2>
           <span class="list-count" id="contacts-count"></span>
-          <input class="search-box" id="contact-search" placeholder="Search name, company, email…" oninput="filterContacts()" style="flex:1;min-width:180px;max-width:300px">
+          <input class="search-box" id="contact-search" placeholder="Search name, company, email…" oninput="filterContacts()" style="flex:1;min-width:180px;max-width:600px">
           <select class="filter-select" id="role-filter" style="width:180px" onchange="filterContacts()">
             <option value="">All Roles</option>
           </select>
@@ -381,8 +381,8 @@ tr:hover td{background:#f8fafc}
       </div>
       <div class="bulk-bar" id="bulk-bar">
         <span id="bulk-count-label">0 selected</span>
-        <button class="btn-danger" style="padding:5px 14px;font-size:12px;margin-right:0" onclick="bulkDeleteSelected()">Delete Selected</button>
-        <button class="btn-secondary" style="padding:5px 14px;font-size:12px" onclick="clearSelection()">Clear</button>
+        <button class="btn-danger" style="padding:5px 14px;font-size:13px;margin-right:0" onclick="bulkDeleteSelected()">Delete Selected</button>
+        <button class="btn-secondary" style="padding:5px 14px;font-size:13px" onclick="clearSelection()">Clear</button>
       </div>
       <div class="tasks-wrap">
         <table class="tasks-table">
@@ -433,7 +433,7 @@ tr:hover td{background:#f8fafc}
         <h2 id="cal-det-title"></h2>
         <div style="margin-top:5px;display:flex;gap:8px;align-items:center">
           <span class="event-type-chip" id="cal-det-chip"></span>
-          <span style="font-size:12px;color:#888" id="cal-det-datetime"></span>
+          <span style="font-size:13px;color:#888" id="cal-det-datetime"></span>
         </div>
       </div>
       <button class="btn-close" onclick="closeCalDetail()">×</button>
@@ -1078,10 +1078,10 @@ function populateCaseFilters() {
     typeSel.appendChild(o);
   });
 
-  // Staff dropdown (attorney responsible)
+  // Staff dropdown (senior associate)
   const staffSel = document.getElementById("case-staff-filter");
   const seenS = new Set();
-  CASES_ARR.forEach(c => { if (c.AttorneyResponsibleID) seenS.add(c.AttorneyResponsibleID); });
+  CASES_ARR.forEach(c => { if (c.SeniorAssociateHandlingID) seenS.add(c.SeniorAssociateHandlingID); });
   [...seenS].map(id => ({ val: id, label: STAFF_MAP[id] || `ID ${id}` }))
     .sort((a,b) => a.label.localeCompare(b.label)).forEach(({val, label}) => {
       const o = document.createElement("option"); o.value = val; o.textContent = label;
@@ -1098,11 +1098,12 @@ function filteredCasesArr() {
     if (q && !(
       (c.Title||"").toLowerCase().includes(q) ||
       (c.PrincipalClaimNumber||"").toLowerCase().includes(q) ||
-      String(c.FileNumber||"").toLowerCase().includes(q)
+      String(c.FileNumber||"").toLowerCase().includes(q) ||
+      (injuriesMap[c.CaseID] || []).some(inj => (inj.WCABCaseNumber||"").toLowerCase().includes(q))
     )) return false;
     if (status && c.CaseStatus !== status) return false;
     if (type   && c.CaseType   !== type)   return false;
-    if (staff  && String(c.AttorneyResponsibleID) !== String(staff)) return false;
+    if (staff  && String(c.SeniorAssociateHandlingID) !== String(staff)) return false;
     return true;
   });
 }
@@ -1121,16 +1122,17 @@ function renderCasesTable(arr) {
   tbody.innerHTML = arr.map(c => {
     const name      = esc(fmtCaseName(c.Title || ""));
     const typeLabel = esc(CASE_TYPE_MAP[parseInt(c.CaseType)] || "");
-    const atty      = esc(STAFF_MAP[c.AttorneyResponsibleID] || "");
-    const para      = esc(STAFF_MAP[c.ParalegalHandlingID]   || "");
-    const claim     = esc(c.PrincipalClaimNumber || "");
+    const srAssoc   = esc(STAFF_MAP[c.SeniorAssociateHandlingID] || "");
+    const para      = esc(STAFF_MAP[c.ParalegalHandlingID]       || "");
+    const adjNums   = [...new Set((injuriesMap[c.CaseID] || [])
+                        .map(inj => inj.WCABCaseNumber).filter(Boolean))].join(", ");
     return `<tr onclick="selectCase(${c.CaseID})">
       <td class="cell-wrap" style="white-space:normal">${name}</td>
       <td>${typeLabel}</td>
       <td>${statusBadge(c.CaseStatus)}</td>
-      <td>${atty}</td>
+      <td>${srAssoc}</td>
       <td>${para}</td>
-      <td>${claim}</td>
+      <td>${esc(adjNums)}</td>
     </tr>`;
   }).join("") || `<tr><td colspan="6" style="text-align:center;padding:24px;color:#9ca3af">No cases found</td></tr>`;
 }
@@ -1198,7 +1200,7 @@ function selectCase(id) {
       </div>
     </div>
     ${partiesHtml}${injuriesHtml}
-    <div id="case-tasks-card"><div style="padding:16px;color:#9ca3af;font-size:13px">Loading tasks…</div></div>`;
+    <div id="case-tasks-card"><div style="padding:16px;color:#9ca3af;font-size:14px">Loading tasks…</div></div>`;
 
   // Load tasks for this case lazily
   loadCaseTasks(id);
@@ -1214,7 +1216,7 @@ function renderCaseTasksCard(tasks) {
       const done = t.Complete;
       const due  = t.DueDate ? fmtDue(t.DueDate) : "—";
       return `<tr class="${done?"task-done-row":""}">
-        <td style="width:32px;color:${done?"#16a34a":"#9ca3af"};font-size:14px">${done?"✓":"○"}</td>
+        <td style="width:32px;color:${done?"#16a34a":"#9ca3af"};font-size:15px">${done?"✓":"○"}</td>
         <td class="task-desc${done?" done-text":""}">${esc(t.Description||t.Title||"")}</td>
         <td style="width:110px">${due}</td>
         <td style="width:140px">${esc(t.AssigneeName||"—")}</td>
@@ -1250,7 +1252,7 @@ async function loadCaseTasks(caseId) {
     if (_selectedCaseId === caseId) renderCaseTasksCard(tasks);
   } catch(e) {
     const el = document.getElementById("case-tasks-card");
-    if (el) el.innerHTML = `<div style="padding:12px;color:#9ca3af;font-size:12px">Could not load tasks</div>`;
+    if (el) el.innerHTML = `<div style="padding:12px;color:#9ca3af;font-size:13px">Could not load tasks</div>`;
   }
 }
 
@@ -1293,11 +1295,11 @@ function renderInjuryRow(inj) {
     <div class="injury-header">
       <span class="injury-date">${doi}${doiEnd}</span>
       ${injTypeLabel ? `<span class="injury-type-badge">${esc(injTypeLabel)}</span>` : ""}
-      ${appStatusLabel ? `<span class="badge badge-other" style="font-size:10px">${esc(appStatusLabel)}</span>` : ""}
+      ${appStatusLabel ? `<span class="badge badge-other" style="font-size:11px">${esc(appStatusLabel)}</span>` : ""}
       ${inj.IsTemporary ? `<span class="badge" style="background:#fef3c7;color:#92400e">Temp</span>` : ""}
       ${inj.IsPermanent ? `<span class="badge" style="background:#dbeafe;color:#1e40af">Perm</span>` : ""}
     </div>
-    ${inj.InjuryDescription ? `<div style="font-size:13px;color:#374151;margin-bottom:8px">${esc(inj.InjuryDescription)}</div>` : ""}
+    ${inj.InjuryDescription ? `<div style="font-size:14px;color:#374151;margin-bottom:8px">${esc(inj.InjuryDescription)}</div>` : ""}
     ${metaFields.length ? `<div class="injury-meta">${metaFields.map(([l,v])=>`<div class="injury-meta-item"><label>${l}</label><span>${esc(v)}</span></div>`).join("")}</div>` : ""}
   </div>`;
 }
@@ -1351,7 +1353,7 @@ function renderContactsTable(arr) {
       <td>${company}</td>
       <td>${phone}</td>
       <td>${email}</td>
-      <td style="text-align:center;color:#6b7280;font-size:12px">${n}</td>
+      <td style="text-align:center;color:#6b7280;font-size:13px">${n}</td>
     </tr>`;
   }).join("") || `<tr><td colspan="5" style="text-align:center;padding:24px;color:#9ca3af">No contacts found</td></tr>`;
 }
@@ -1390,7 +1392,7 @@ function selectContact(id) {
     });
     const relArr = Object.values(related).filter(Boolean);
     if (relArr.length) {
-      relatedHtml = `<div style="margin-top:12px"><div style="font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">${isEmployer?"Related Carriers / TPAs":"Related TPAs"}</div>
+      relatedHtml = `<div style="margin-top:12px"><div style="font-size:12px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">${isEmployer?"Related Carriers / TPAs":"Related TPAs"}</div>
         <div class="party-cards">${relArr.map(rc => {
           const rname = ((rc.FirstName||"")+" "+(rc.LastName||"")).trim() || rc.CompanyName||"—";
           return `<div class="party-card" onclick="selectContact(${rc.ContactID})"><div class="party-name">${esc(rname)}</div>${rc.Phone?`<div class="party-phone">${esc(rc.Phone)}</div>`:""}</div>`;
@@ -1415,8 +1417,8 @@ function selectContact(id) {
   document.getElementById("contact-detail").innerHTML = `
     <div class="card">
       <div class="card-body">
-        <div style="font-size:20px;font-weight:700;color:#1a3a5c;margin-bottom:${company?4:10}px">${esc(name)}</div>
-        ${company?`<div style="font-size:13px;color:#6b7280;margin-bottom:10px">${esc(company)}</div>`:""}
+        <div style="font-size:21px;font-weight:700;color:#1a3a5c;margin-bottom:${company?4:10}px">${esc(name)}</div>
+        ${company?`<div style="font-size:14px;color:#6b7280;margin-bottom:10px">${esc(company)}</div>`:""}
         <div class="info-grid">
           ${c.addr?`<div class="info-item"><label>Address</label><span>${esc(c.addr)}</span></div>`:""}
           ${c.Phone?`<div class="info-item"><label>Phone</label><span>${esc(c.Phone)}</span></div>`:""}
@@ -1671,8 +1673,8 @@ function renderTasksTable() {
     return `<tr class="${done ? "task-done-row" : ""}${isSel ? " task-row-selected" : ""}" data-rowkey="${rowKey}" onclick="${editFn}">
       <td><input type="checkbox" class="task-sel-cb" ${isSel ? "checked" : ""} onclick="event.stopPropagation()" onchange="toggleRowSelect('${rowKey}', this.checked)"></td>
       <td><div class="task-desc">${srcBadge}<span class="task-title-link${done ? " done-text" : ""}">${title}</span></div></td>
-      <td style="color:#6b7280;font-size:12px">${author}</td>
-      <td style="color:#6b7280;font-size:12px">${created}</td>
+      <td style="color:#6b7280;font-size:13px">${author}</td>
+      <td style="color:#6b7280;font-size:13px">${created}</td>
       <td>${due}</td>
       <td>${cname}</td>
       <td>${esc(t.assignee || "—")}</td>
@@ -2036,7 +2038,7 @@ function buildFcEvents() {
 // ── Rebuild filter chips from EVENT_COLORS ──
 function buildCalFilterChips() {
   const bar = document.getElementById("cal-filter-bar");
-  bar.innerHTML = '<span style="font-weight:600;color:#4b5563;font-size:11px;text-transform:uppercase;letter-spacing:.5px;flex-shrink:0">FILTER:</span>';
+  bar.innerHTML = '<span style="font-weight:600;color:#4b5563;font-size:12px;text-transform:uppercase;letter-spacing:.5px;flex-shrink:0">FILTER:</span>';
   Object.entries(EVENT_COLORS).forEach(([type, color]) => {
     const chip = document.createElement("span");
     chip.className = "cal-filter-chip";
