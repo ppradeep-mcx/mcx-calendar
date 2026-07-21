@@ -120,6 +120,12 @@ tr:hover td{background:#f8fafc}
 .tasks-table td{padding:10px 12px;border-bottom:1px solid #f3f4f6;vertical-align:middle}
 .tasks-table tr:last-child td{border-bottom:none}
 .tasks-table tr:hover td{background:#f8fafc}
+.typeahead-wrap{position:relative;width:100%}
+.typeahead-dropdown{position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #d1d5db;border-radius:0 0 6px 6px;box-shadow:0 4px 12px rgba(0,0,0,.12);z-index:2000;max-height:200px;overflow-y:auto;display:none}
+.typeahead-dropdown.open{display:block}
+.typeahead-option{padding:8px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid #f3f4f6}
+.typeahead-option:last-child{border-bottom:none}
+.typeahead-option:hover{background:#eff6ff}
 .task-done-row td{opacity:.55}
 .task-check{cursor:pointer;font-size:16px;user-select:none;white-space:nowrap}
 .task-check:hover{opacity:.75}
@@ -305,6 +311,7 @@ tr:hover td{background:#f8fafc}
               <th style="width:36px"></th>
               <th>Title</th>
               <th style="width:120px">Author</th>
+              <th style="width:100px">Created</th>
               <th style="width:110px">Due Date</th>
               <th style="width:180px">Case</th>
               <th style="width:120px">Assignee</th>
@@ -354,6 +361,10 @@ tr:hover td{background:#f8fafc}
     <div class="modal-body">
       <div class="detail-row"><div class="label">Case</div><div class="val" id="cal-det-case"></div></div>
       <div class="detail-row"><div class="label">Case File ID</div><div class="val" id="cal-det-fileid"></div></div>
+      <div class="detail-row"><div class="label">Atty Responsible</div><div class="val" id="cal-det-atty-resp"></div></div>
+      <div class="detail-row"><div class="label">Atty Handling</div><div class="val" id="cal-det-atty-hand"></div></div>
+      <div class="detail-row"><div class="label">Sr. Associate</div><div class="val" id="cal-det-sr-assoc"></div></div>
+      <div class="detail-row"><div class="label">Hearing Rep</div><div class="val" id="cal-det-hearing-rep"></div></div>
       <div class="detail-row"><div class="label">Location</div><div class="val" id="cal-det-location"></div></div>
       <div class="detail-row"><div class="label">Assignees</div><div class="val" id="cal-det-assignees"></div></div>
       <div class="detail-row"><div class="label">Notes</div><div class="val" id="cal-det-notes" style="white-space:pre-wrap"></div></div>
@@ -463,13 +474,20 @@ tr:hover td{background:#f8fafc}
           </div>
           <div class="form-row">
             <label>Assignee Name</label>
-            <input type="text" id="tf-assignee" placeholder="e.g. Aneeta Mishra">
+            <div class="typeahead-wrap">
+              <input type="text" id="tf-assignee" placeholder="Type name…" autocomplete="off">
+              <div class="typeahead-dropdown" id="tf-assignee-drop"></div>
+            </div>
           </div>
         </div>
         <div class="form-grid-2">
           <div class="form-row">
-            <label>Case File ID</label>
-            <input type="number" id="tf-caseid" placeholder="MerusCase File ID">
+            <label>Case</label>
+            <div class="typeahead-wrap">
+              <input type="text" id="tf-case-name" placeholder="Type case name…" autocomplete="off">
+              <input type="hidden" id="tf-caseid">
+              <div class="typeahead-dropdown" id="tf-case-drop"></div>
+            </div>
           </div>
           <div class="form-row">
             <label>Priority (1=High, 3=Normal, 5=Low)</label>
@@ -508,7 +526,7 @@ tr:hover td{background:#f8fafc}
             <div id="etf-from" class="etf-readonly"></div>
           </div>
           <div class="form-row">
-            <label>Received</label>
+            <label>Task Created</label>
             <div id="etf-received" class="etf-readonly"></div>
           </div>
         </div>
@@ -524,13 +542,20 @@ tr:hover td{background:#f8fafc}
           </div>
           <div class="form-row">
             <label>Assignee</label>
-            <input type="text" id="etf-assignee" placeholder="e.g. Aneeta Mishra">
+            <div class="typeahead-wrap">
+              <input type="text" id="etf-assignee" placeholder="Type name…" autocomplete="off">
+              <div class="typeahead-dropdown" id="etf-assignee-drop"></div>
+            </div>
           </div>
         </div>
         <div class="form-grid-2">
           <div class="form-row">
-            <label>Case File ID</label>
-            <input type="number" id="etf-caseid" placeholder="MerusCase File ID">
+            <label>Case</label>
+            <div class="typeahead-wrap">
+              <input type="text" id="etf-case-name" placeholder="Type case name…" autocomplete="off">
+              <input type="hidden" id="etf-caseid">
+              <div class="typeahead-dropdown" id="etf-case-drop"></div>
+            </div>
           </div>
           <div class="form-row">
             <label>Priority</label>
@@ -689,6 +714,7 @@ async function initApp(account) {
   try {
     await loadAllData();
     buildIndexes();
+    initTypeaheads();
     populateRoleFilter();
     populateAssigneeFilter();
     document.getElementById("loading-overlay").style.display = "none";
@@ -1194,6 +1220,59 @@ function populateAssigneeFilter() {
   if (prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
 }
 
+// ── Typeahead ──────────────────────────────────────────────────────────────────
+function setupTypeahead(inputId, dropId, items, labelFn, onSelect, onClear) {
+  const inp  = document.getElementById(inputId);
+  const drop = document.getElementById(dropId);
+  if (!inp || !drop) return;
+  inp.addEventListener("input", () => {
+    if (onClear) onClear();
+    const q = inp.value.trim().toLowerCase();
+    drop.innerHTML = "";
+    if (!q) { drop.classList.remove("open"); return; }
+    const matches = items.filter(x => labelFn(x).toLowerCase().includes(q)).slice(0, 12);
+    if (!matches.length) { drop.classList.remove("open"); return; }
+    matches.forEach(x => {
+      const opt = document.createElement("div");
+      opt.className = "typeahead-option";
+      opt.textContent = labelFn(x);
+      opt.addEventListener("mousedown", e => {
+        e.preventDefault();
+        onSelect(x, inp);
+        drop.classList.remove("open");
+      });
+      drop.appendChild(opt);
+    });
+    drop.classList.add("open");
+  });
+  inp.addEventListener("blur", () => setTimeout(() => drop.classList.remove("open"), 150));
+}
+
+function initTypeaheads() {
+  const staffList = Object.entries(STAFF_MAP).map(([id, name]) => ({ id: +id, name }));
+  const caseList  = CASES_ARR;
+  const caseLabel = c => c.Title || "";
+
+  // MC Task modal — Case
+  setupTypeahead("tf-case-name", "tf-case-drop", caseList, caseLabel,
+    (c, inp) => { inp.value = caseLabel(c); document.getElementById("tf-caseid").value = c.CaseID || ""; },
+    ()       => { document.getElementById("tf-caseid").value = ""; }
+  );
+  // MC Task modal — Assignee
+  setupTypeahead("tf-assignee", "tf-assignee-drop", staffList, s => s.name,
+    (s, inp) => { inp.value = s.name; }
+  );
+  // Email Task modal — Case
+  setupTypeahead("etf-case-name", "etf-case-drop", caseList, caseLabel,
+    (c, inp) => { inp.value = caseLabel(c); document.getElementById("etf-caseid").value = c.CaseID || ""; },
+    ()       => { document.getElementById("etf-caseid").value = ""; }
+  );
+  // Email Task modal — Assignee
+  setupTypeahead("etf-assignee", "etf-assignee-drop", staffList, s => s.name,
+    (s, inp) => { inp.value = s.name; }
+  );
+}
+
 function renderTasksTable() {
   const status   = document.getElementById("status-filter")?.value   || "incomplete";
   const assignee = document.getElementById("assignee-filter")?.value || "";
@@ -1208,6 +1287,7 @@ function renderTasksTable() {
       author:   t.AuthorName || "",
       assignee: t.AssigneeName || "",
       dueDate:  t.DueDate || "",
+      created:  t.TaskCreated || "",
       caseId:   t.CaseFileID || null,
       done:     !!t.Complete,
     })),
@@ -1218,6 +1298,7 @@ function renderTasksTable() {
       author:   t.AuthorName || "",
       assignee: t.Assignee || "",
       dueDate:  t.DueDate || "",
+      created:  t.EmailReceivedDate || "",
       caseId:   t.CaseFileID || null,
       done:     t.Status === "Resolved",
     })),
@@ -1241,7 +1322,7 @@ function renderTasksTable() {
   const tbody = document.getElementById("tasks-tbody");
 
   if (!TASKS_LIST_ID && !EMAIL_TASKS_LIST_ID) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:24px;color:#9ca3af">Tasks SP list not yet synced. Run CaseDB-to-SP-List.py to populate.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:24px;color:#9ca3af">Tasks SP list not yet synced. Run CaseDB-to-SP-List.py to populate.</td></tr>`;
     return;
   }
 
@@ -1252,6 +1333,7 @@ function renderTasksTable() {
       : `<span class="task-source-badge src-mc">MC</span>`;
     const title    = esc(t.title);
     const author   = esc(t.author || "—");
+    const created  = t.created ? new Date(t.created + (t.created.includes("T") ? "" : "T00:00:00")).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}) : "—";
     const due      = t.dueDate ? fmtDue(t.dueDate) : `<span class="due-ok">—</span>`;
     const cname    = t.caseId && caseMap[t.caseId]
       ? `<a href="#" onclick="gotoCase(${t.caseId});return false" style="color:#1a3a5c">${esc(fmtCaseName(caseMap[t.caseId].Title || ""))}</a>`
@@ -1266,6 +1348,7 @@ function renderTasksTable() {
       <td><span class="task-check" title="${done ? "Mark incomplete" : "Mark complete"}" onclick="${toggleFn}">${done ? "✅" : "⬜"}</span></td>
       <td><div class="task-desc${done ? " done-text" : ""}">${srcBadge}${title}</div></td>
       <td style="color:#6b7280;font-size:12px">${author}</td>
+      <td style="color:#6b7280;font-size:12px">${created}</td>
       <td>${due}</td>
       <td>${cname}</td>
       <td>${esc(t.assignee || "—")}</td>
@@ -1273,7 +1356,7 @@ function renderTasksTable() {
         <button class="task-action-btn" onclick="${editFn}">Edit</button>
       </td>
     </tr>`;
-  }).join("") || `<tr><td colspan="7" style="text-align:center;padding:24px;color:#9ca3af">No tasks</td></tr>`;
+  }).join("") || `<tr><td colspan="8" style="text-align:center;padding:24px;color:#9ca3af">No tasks</td></tr>`;
 }
 
 function fmtDue(dateStr) {
@@ -1337,6 +1420,7 @@ function openTaskModal(spId) {
       document.getElementById("tf-due").value       = t.DueDate ? t.DueDate.split("T")[0] : "";
       document.getElementById("tf-assignee").value  = t.AssigneeName || "";
       document.getElementById("tf-caseid").value    = t.CaseFileID || "";
+      document.getElementById("tf-case-name").value = t.CaseFileID && caseMap[t.CaseFileID] ? (caseMap[t.CaseFileID].Title || "") : "";
       document.getElementById("tf-priority").value  = t.Priority || 3;
     }
   }
@@ -1437,10 +1521,11 @@ function openEmailTaskModal(spId) {
     : "—";
 
   // Editable fields
-  document.getElementById("etf-title").value    = t.TaskTitle || "";
-  document.getElementById("etf-due").value      = t.DueDate ? t.DueDate.split("T")[0] : "";
-  document.getElementById("etf-assignee").value = t.Assignee || "";
-  document.getElementById("etf-caseid").value   = t.CaseFileID || "";
+  document.getElementById("etf-title").value      = t.TaskTitle || "";
+  document.getElementById("etf-due").value        = t.DueDate ? t.DueDate.split("T")[0] : "";
+  document.getElementById("etf-assignee").value   = t.Assignee || "";
+  document.getElementById("etf-caseid").value     = t.CaseFileID || "";
+  document.getElementById("etf-case-name").value  = t.CaseFileID && caseMap[t.CaseFileID] ? (caseMap[t.CaseFileID].Title || "") : "";
   document.getElementById("etf-priority").value = t.Priority || "Medium";
   document.getElementById("etf-notes").value    = t.Notes || "";
   document.getElementById("etf-status").value   = t.Status || "Open";
@@ -1672,6 +1757,11 @@ function showCalDetail(event) {
   const v = (id, text) => { const el=document.getElementById(id); el.textContent=text||"—"; el.className=text?"val":"val muted"; };
   v("cal-det-case",      p.caseName);
   v("cal-det-fileid",    p.caseFileId);
+  const c = caseMap[p.caseFileId] || {};
+  v("cal-det-atty-resp",  STAFF_MAP[c.AttorneyResponsibleID]     || (c.AttorneyResponsibleID     ? `#${c.AttorneyResponsibleID}`     : ""));
+  v("cal-det-atty-hand",  STAFF_MAP[c.AttorneyHandlingID]        || (c.AttorneyHandlingID         ? `#${c.AttorneyHandlingID}`         : ""));
+  v("cal-det-sr-assoc",   STAFF_MAP[c.SeniorAssociateHandlingID] || (c.SeniorAssociateHandlingID  ? `#${c.SeniorAssociateHandlingID}`  : ""));
+  v("cal-det-hearing-rep", STAFF_MAP[c.HearingRepID]            || (c.HearingRepID               ? `#${c.HearingRepID}`               : ""));
   v("cal-det-location",  p.location);
   v("cal-det-assignees", p.assignees);
   v("cal-det-notes",     p.notes);
