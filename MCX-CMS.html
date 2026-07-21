@@ -1089,6 +1089,18 @@ function populateCaseFilters() {
     });
 }
 
+function caseSortKey(title) {
+  // Raw title: "LastName, First Middle v. Employer"
+  // Sort key: "First Middle Last" (first-name primary)
+  const m = (title || "").match(/^([^,]+),\s*(.+?)\s+v\./i);
+  if (m) {
+    const last  = m[1].trim();
+    const given = m[2].trim(); // "First [Middle]"
+    return `${given} ${last}`.toLowerCase();
+  }
+  return (title || "").toLowerCase();
+}
+
 function filteredCasesArr() {
   const q      = (document.getElementById("case-search")?.value || "").toLowerCase();
   const status = document.getElementById("case-status-filter")?.value || "";
@@ -1105,7 +1117,7 @@ function filteredCasesArr() {
     if (type   && c.CaseType   !== type)   return false;
     if (staff  && String(c.SeniorAssociateHandlingID) !== String(staff)) return false;
     return true;
-  });
+  }).sort((a, b) => caseSortKey(a.Title).localeCompare(caseSortKey(b.Title)));
 }
 
 function filterCases() { renderCasesTable(filteredCasesArr()); }
@@ -1322,6 +1334,14 @@ function populateRoleFilter() {
   });
 }
 
+function contactSortKey(c) {
+  // Sort by: First Middle Last (first-name primary); fall back to CompanyName
+  const first = (c.FirstName || "").trim();
+  const last  = (c.LastName  || "").trim();
+  if (first || last) return `${first} ${last}`.trim().toLowerCase();
+  return (c.CompanyName || "").toLowerCase();
+}
+
 function filteredContactsArr() {
   const q    = (document.getElementById("contact-search")?.value || "").toLowerCase();
   const role = document.getElementById("role-filter")?.value || "";
@@ -1332,7 +1352,7 @@ function filteredContactsArr() {
     const company = c.CompanyName || "";
     const email   = c.Email || "";
     return !q || name.toLowerCase().includes(q) || phone.includes(q) || company.toLowerCase().includes(q) || email.toLowerCase().includes(q);
-  });
+  }).sort((a, b) => contactSortKey(a).localeCompare(contactSortKey(b)));
 }
 
 function filterContacts() { renderContactsTable(filteredContactsArr()); }
@@ -1617,6 +1637,7 @@ function renderTasksTable() {
       created:  t.TaskCreated || "",
       caseId:   t.CaseFileID || null,
       done:     !!t.Complete,
+      priority: t.Priority != null ? Number(t.Priority) : 3,  // 1=High … 5=Low; default Normal
     })),
     ...EMAIL_TASKS_ARR.map(t => ({
       _spId:    t._spId,
@@ -1628,6 +1649,7 @@ function renderTasksTable() {
       created:  t.EmailReceivedDate || "",
       caseId:   t.CaseFileID || null,
       done:     t.Status === "Resolved",
+      priority: t.Priority === "High" ? 1 : t.Priority === "Medium" ? 3 : t.Priority === "Low" ? 5 : 3,
     })),
   ];
 
@@ -1640,8 +1662,12 @@ function renderTasksTable() {
   });
 
   filtered.sort((a, b) => {
-    if (a.done !== b.done) return a.done ? 1 : -1;
-    return (a.dueDate || "").localeCompare(b.dueDate || "");
+    if (a.done !== b.done) return a.done ? 1 : -1;          // incomplete first
+    if (a.priority !== b.priority) return a.priority - b.priority; // 1=High first
+    const aDue = a.dueDate || "9999";
+    const bDue = b.dueDate || "9999";
+    if (aDue !== bDue) return aDue.localeCompare(bDue);     // earlier due date first
+    return (a.created || "").localeCompare(b.created || ""); // older created first
   });
 
   document.getElementById("tasks-count").textContent = `${filtered.length} task${filtered.length !== 1 ? "s" : ""}`;
